@@ -17,7 +17,6 @@ android {
         targetSdk = 35
         versionCode = code
         versionName = appVersion
-        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     signingConfigs {
@@ -29,6 +28,9 @@ android {
                 keyAlias = System.getenv("RG_KEY_ALIAS") ?: "rahgozar"
                 keyPassword = System.getenv("RG_KEYSTORE_PASSWORD")
             }
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
         }
     }
 
@@ -37,6 +39,15 @@ android {
             isMinifyEnabled = false
             val rel = signingConfigs.getByName("release")
             signingConfig = if (rel.storeFile != null) rel else signingConfigs.getByName("debug")
+        }
+    }
+
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = true
         }
     }
 

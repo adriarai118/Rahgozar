@@ -46,7 +46,7 @@ func semverLess(a, b string) bool {
 
 var appAsset = func() *regexp.Regexp {
 	if runtime.GOOS == "android" {
-		return regexp.MustCompile(`(?i)rahgozar.*android.*\.apk$`)
+		return regexp.MustCompile(`(?i)^rahgozar-android\.apk$`)
 	}
 	return regexp.MustCompile(`(?i)rahgozar.*` + runtime.GOOS + `.*` + runtime.GOARCH + `.*\.(zip|exe)$`)
 }()

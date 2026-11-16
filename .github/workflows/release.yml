@@ -107,11 +107,15 @@ jobs:
         run: |
           export RG_VERSION="$(cat VERSION | tr -d '[:space:]')"
           gradle -p android --no-daemon assembleRelease
-          cp android/app/build/outputs/apk/release/app-release.apk Rahgozar-android.apk
+          O=android/app/build/outputs/apk/release
+          ls $O
+          cp $O/app-universal-release.apk Rahgozar-android.apk
+          cp $O/app-arm64-v8a-release.apk Rahgozar-android-arm64.apk
+          cp $O/app-armeabi-v7a-release.apk Rahgozar-android-armv7.apk
       - uses: actions/upload-artifact@v4
         with:
           name: android
-          path: Rahgozar-android.apk
+          path: Rahgozar-android*.apk
 
   release:
     needs: [windows, android]
@@ -133,3 +137,5 @@ jobs:
             Rahgozar-windows-amd64.zip
             Rahgozar-extension.zip
             Rahgozar-android.apk
+            Rahgozar-android-arm64.apk
+            Rahgozar-android-armv7.apk
