@@ -82,8 +82,12 @@ func (s *Store) ReadJSON(name string, v any) error { return readJSON(filepath.Jo
 // SaveJSON writes a JSON file in the data dir.
 func (s *Store) SaveJSON(name string, v any) error { return WriteJSON(filepath.Join(s.Dir, name), v) }
 
-func (s *Store) saveProfiles() error { return WriteJSON(filepath.Join(s.Dir, "profiles.json"), s.profiles) }
-func (s *Store) saveSubs() error     { return WriteJSON(filepath.Join(s.Dir, "subscriptions.json"), s.subs) }
+func (s *Store) saveProfiles() error {
+	return WriteJSON(filepath.Join(s.Dir, "profiles.json"), s.profiles)
+}
+func (s *Store) saveSubs() error {
+	return WriteJSON(filepath.Join(s.Dir, "subscriptions.json"), s.subs)
+}
 
 // Settings returns a copy of the settings.
 func (s *Store) Settings() model.Settings {

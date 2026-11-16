@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -217,6 +218,27 @@ func OpenPath(p string) error {
 	verb, _ := windows.UTF16PtrFromString("open")
 	file, _ := windows.UTF16PtrFromString(p)
 	return windows.ShellExecute(0, verb, file, nil, nil, windows.SW_NORMAL)
+}
+
+// StartDetached launches a GUI program normally visible (unlike Command,
+// which hides console windows of helper tools) and does not wait for it.
+func StartDetached(exe string, args ...string) error {
+	c := exec.Command(exe, args...)
+	c.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x00000008 | 0x00000200} // DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+	if err := c.Start(); err != nil {
+		return err
+	}
+	return c.Process.Release()
+}
+
+// WaitPID waits until a process exits (or the timeout passes).
+func WaitPID(pid int, timeout time.Duration) {
+	h, err := windows.OpenProcess(windows.SYNCHRONIZE, false, uint32(pid))
+	if err != nil {
+		return
+	}
+	defer windows.CloseHandle(h)
+	windows.WaitForSingleObject(h, uint32(timeout.Milliseconds()))
 }
 
 // KillPID terminates a process by pid (best effort).

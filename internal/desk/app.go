@@ -8,9 +8,11 @@ import (
 	"os"
 	"path/filepath"
 	goruntime "runtime"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"rahgozar/internal/builder"
@@ -267,7 +269,7 @@ func (a *App) SetRouting(mode string) error {
 // RelaunchAdmin restarts elevated.
 func (a *App) RelaunchAdmin() error {
 	a.core.Disconnect()
-	if err := sys.RelaunchAsAdmin(); err != nil {
+	if err := sys.RelaunchAsAdmin("--wait-pid", strconv.Itoa(os.Getpid())); err != nil {
 		return err
 	}
 	runtime.Quit(a.ctx)
@@ -572,7 +574,9 @@ func (a *App) ApplyAppUpdate() error {
 	}
 	a.core.Disconnect()
 	exe, _ := os.Executable()
-	sys.Command(exe).Start()
+	if err := sys.StartDetached(exe, "--wait-pid", strconv.Itoa(os.Getpid())); err != nil {
+		return err
+	}
 	runtime.Quit(a.ctx)
 	return nil
 }
@@ -714,4 +718,21 @@ func StartHeadless(a *App, emit func(string, any)) {
 	a.core.Emit = emit
 	a.core.Init()
 	a.startAPI(emit)
+}
+
+// OnSecondInstance brings the existing window to the front when the user
+// starts Rahgozar again (double-click on the exe, autostart, etc.).
+func OnSecondInstance(a *App) func(options.SecondInstanceData) {
+	return func(options.SecondInstanceData) {
+		if a.ctx == nil {
+			return
+		}
+		runtime.WindowUnminimise(a.ctx)
+		runtime.WindowShow(a.ctx)
+		runtime.WindowSetAlwaysOnTop(a.ctx, true)
+		go func() {
+			time.Sleep(300 * time.Millisecond)
+			runtime.WindowSetAlwaysOnTop(a.ctx, false)
+		}()
+	}
 }

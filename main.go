@@ -2,6 +2,10 @@ package main
 
 import (
 	"os"
+	"strconv"
+	"time"
+
+	"rahgozar/internal/sys"
 
 	"rahgozar/frontend"
 	"rahgozar/internal/desk"
@@ -13,6 +17,16 @@ import (
 )
 
 func main() {
+	// After an in-app update or "run as administrator" the old instance is
+	// still shutting down; wait for it, otherwise the single-instance lock
+	// hands control to the dying process and no window appears.
+	for i, a := range os.Args[1:] {
+		if a == "--wait-pid" && i+2 < len(os.Args) {
+			if pid, err := strconv.Atoi(os.Args[i+2]); err == nil {
+				sys.WaitPID(pid, 20*time.Second)
+			}
+		}
+	}
 	app := desk.NewApp(os.Args[1:])
 	onStart, onStop := desk.Hooks(app)
 	start := options.Normal
@@ -35,7 +49,8 @@ func main() {
 		OnShutdown:       onStop,
 		Bind:             []interface{}{app},
 		SingleInstanceLock: &options.SingleInstanceLock{
-			UniqueId: "rahgozar-vpn-7f3c",
+			UniqueId:               "rahgozar-vpn-7f3c",
+			OnSecondInstanceLaunch: desk.OnSecondInstance(app),
 		},
 		Windows: &windows.Options{
 			WebviewIsTransparent: false,

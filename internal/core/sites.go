@@ -25,13 +25,13 @@ const (
 type SiteInfo struct {
 	Host     string `json:"host"`
 	Base     string `json:"base"`
-	Rule     string `json:"rule"`     // user choice: proxy | direct | block | auto
-	RuleOn   string `json:"ruleOn"`   // the domain entry that matched (may be a parent)
-	Learned  string `json:"learned"`  // learner verdict
-	Reason   string `json:"reason"`   // learner reason
-	Route    string `json:"route"`    // effective: proxy | direct | block
-	Why      string `json:"why"`      // human explanation
-	Routing  string `json:"routing"`  // routing mode
+	Rule     string `json:"rule"`    // user choice: proxy | direct | block | auto
+	RuleOn   string `json:"ruleOn"`  // the domain entry that matched (may be a parent)
+	Learned  string `json:"learned"` // learner verdict
+	Reason   string `json:"reason"`  // learner reason
+	Route    string `json:"route"`   // effective: proxy | direct | block
+	Why      string `json:"why"`     // human explanation
+	Routing  string `json:"routing"` // routing mode
 	Iranian  bool   `json:"iranian"`
 	Checked  int64  `json:"checked"`
 	Learning bool   `json:"learning"` // learner active (smart mode)

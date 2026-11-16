@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 	"syscall"
+	"time"
 )
 
 func hide(c *exec.Cmd) {}
@@ -58,6 +59,26 @@ func FixL2TPBehindNAT() error { return errors.New("windows only") }
 
 // OpenPath opens with xdg-open.
 func OpenPath(p string) error { return exec.Command("xdg-open", p).Start() }
+
+// StartDetached launches a program without waiting.
+func StartDetached(exe string, args ...string) error {
+	c := exec.Command(exe, args...)
+	if err := c.Start(); err != nil {
+		return err
+	}
+	return c.Process.Release()
+}
+
+// WaitPID waits until a process exits (or the timeout passes).
+func WaitPID(pid int, timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if syscall.Kill(pid, 0) != nil {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
 
 // KillPID terminates a process.
 func KillPID(pid int) { syscall.Kill(pid, syscall.SIGKILL) }

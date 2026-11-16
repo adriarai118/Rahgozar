@@ -279,7 +279,11 @@ func (c *Core) connectLocked(forceID string) error {
 
 func (c *Core) connectRAS(p *model.Profile, netID string, fail func(error) error) error {
 	name := "Rahgozar " + strings.ToUpper(p.Type)
-	c.setStatus(func(s *Status) { s.Message = "اتصال " + strings.ToUpper(p.Type) + " ویندوز…"; s.Engine = "Windows VPN"; s.Mode = "system" })
+	c.setStatus(func(s *Status) {
+		s.Message = "اتصال " + strings.ToUpper(p.Type) + " ویندوز…"
+		s.Engine = "Windows VPN"
+		s.Mode = "system"
+	})
 	err := sys.RASConnect(sys.RASConfig{Name: name, Type: p.Type, Server: p.Server, Port: p.Port, Username: p.Username, Password: p.Password, PSK: p.PSK})
 	if err != nil {
 		c.Learner.Record(p.ID, p.Family(), netID, "", false, 0)
@@ -782,7 +786,11 @@ func (c *Core) failover(reason string) {
 	c.recordUsage(st)
 	c.stopAll()
 	failovers := st.Failovers + 1
-	c.setStatus(func(s *Status) { s.State = "connecting"; s.Message = "جستجوی سرور سالم…"; s.Failovers = failovers })
+	c.setStatus(func(s *Status) {
+		s.State = "connecting"
+		s.Message = "جستجوی سرور سالم…"
+		s.Failovers = failovers
+	})
 	best, err := c.ChooseBest(st.NetID, map[string]bool{st.ProfileID: true})
 	if err != nil {
 		// retry the same server once more

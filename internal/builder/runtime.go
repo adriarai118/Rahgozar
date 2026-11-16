@@ -2,9 +2,9 @@ package builder
 
 import (
 	"encoding/json"
-	"os"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -13,11 +13,11 @@ import (
 
 // Rule-set files shipped in the rules folder.
 var RuleSetFiles = map[string]string{
-	"geoip-ir":                "geoip-ir.srs",
-	"geosite-ir":              "geosite-ir.srs",
+	"geoip-ir":                 "geoip-ir.srs",
+	"geosite-ir":               "geosite-ir.srs",
 	"geosite-category-ads-all": "geosite-category-ads-all.srs",
-	"geosite-malware":         "geosite-malware.srs",
-	"geosite-phishing":        "geosite-phishing.srs",
+	"geosite-malware":          "geosite-malware.srs",
+	"geosite-phishing":         "geosite-phishing.srs",
 }
 
 // LearnedFiles are written by the smart learner (sing-box source rule-sets,
@@ -385,10 +385,10 @@ func BuildTest(in *TestInput) (M, []string) {
 	}
 	obs = append(obs, M{"type": "direct", "tag": "direct"})
 	cfg := M{
-		"log":       M{"level": "error"},
-		"dns":       M{"servers": []M{{"type": "udp", "tag": "d", "server": "8.8.8.8"}, {"type": "local", "tag": "l"}}},
-		"outbounds": obs,
-		"route":     M{"final": "direct", "auto_detect_interface": true, "default_domain_resolver": "d"},
+		"log":          M{"level": "error"},
+		"dns":          M{"servers": []M{{"type": "udp", "tag": "d", "server": "8.8.8.8"}, {"type": "local", "tag": "l"}}},
+		"outbounds":    obs,
+		"route":        M{"final": "direct", "auto_detect_interface": true, "default_domain_resolver": "d"},
 		"experimental": M{"clash_api": M{"external_controller": in.ClashAddr, "secret": in.ClashSecret}},
 	}
 	if len(eps) > 0 {

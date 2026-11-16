@@ -157,33 +157,33 @@ func (p *Profile) IsRAS() bool {
 
 // Subscription is a remote list of profiles.
 type Subscription struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	URL         string `json:"url"`
-	AutoUpdate  bool   `json:"autoUpdate"`
-	IntervalH   int    `json:"intervalH"`
-	LastUpdate  int64  `json:"lastUpdate"`
-	Count       int    `json:"count"`
-	UserAgent   string `json:"userAgent,omitempty"`
-	ViaProxy    bool   `json:"viaProxy"`
-	Upload      int64  `json:"upload,omitempty"`
-	Download    int64  `json:"download,omitempty"`
-	Total       int64  `json:"total,omitempty"`
-	Expire      int64  `json:"expire,omitempty"`
-	LastError   string `json:"lastError,omitempty"`
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	URL        string `json:"url"`
+	AutoUpdate bool   `json:"autoUpdate"`
+	IntervalH  int    `json:"intervalH"`
+	LastUpdate int64  `json:"lastUpdate"`
+	Count      int    `json:"count"`
+	UserAgent  string `json:"userAgent,omitempty"`
+	ViaProxy   bool   `json:"viaProxy"`
+	Upload     int64  `json:"upload,omitempty"`
+	Download   int64  `json:"download,omitempty"`
+	Total      int64  `json:"total,omitempty"`
+	Expire     int64  `json:"expire,omitempty"`
+	LastError  string `json:"lastError,omitempty"`
 }
 
 // Settings are user preferences.
 type Settings struct {
-	Language        string   `json:"language"`        // fa | en
-	Theme           string   `json:"theme"`           // dark | light | auto
-	Mode            string   `json:"mode"`            // proxy | tun
-	RoutingMode     string   `json:"routingMode"`     // smart | global | rules | direct
-	SelectedID      string   `json:"selectedId"`      // selected profile id or "auto"
-	AutoSelect      bool     `json:"autoSelect"`      // smart best-server choice on connect
-	AutoFailover    bool     `json:"autoFailover"`    // switch servers when current dies
-	LearnDomains    bool     `json:"learnDomains"`    // smart routing learner
-	MixedPort       int      `json:"mixedPort"`       // local socks+http port
+	Language        string   `json:"language"`     // fa | en
+	Theme           string   `json:"theme"`        // dark | light | auto
+	Mode            string   `json:"mode"`         // proxy | tun
+	RoutingMode     string   `json:"routingMode"`  // smart | global | rules | direct
+	SelectedID      string   `json:"selectedId"`   // selected profile id or "auto"
+	AutoSelect      bool     `json:"autoSelect"`   // smart best-server choice on connect
+	AutoFailover    bool     `json:"autoFailover"` // switch servers when current dies
+	LearnDomains    bool     `json:"learnDomains"` // smart routing learner
+	MixedPort       int      `json:"mixedPort"`    // local socks+http port
 	AllowLAN        bool     `json:"allowLan"`
 	SetSystemProxy  bool     `json:"setSystemProxy"`
 	BypassLAN       bool     `json:"bypassLan"`
