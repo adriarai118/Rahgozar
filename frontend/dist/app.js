@@ -28,7 +28,7 @@ const NAV = [
 
 function renderRail() {
   const rail = document.getElementById('rail');
-  const st = S.st ? S.st.status : {};
+  const st = (S.st && S.st.status) || {};
   const dot = st.state === 'connected' ? 'on' : st.state === 'error' ? 'err' : st.state === 'connecting' ? 'warn' : '';
   const engBadge = S.engines && S.engines.some(e => e.hasUpdate) ? '<span class="badge warn">جدید</span>' : '';
   rail.innerHTML = `
@@ -56,7 +56,7 @@ function renderTitle() {
   el.textContent = t;
 }
 
-function go(page) {
+function navigate(page) {
   S.page = page;
   render();
   document.getElementById('view').scrollTop = 0;
@@ -120,7 +120,7 @@ async function toggleConnect() {
   try {
     if (st === 'connected' || st === 'connecting') await API.call('Disconnect');
     else {
-      if (!S.st.enginesOk) { toast('ابتدا موتور sing-box را از بخش «موتورها» نصب کنید', 'warn'); go('engines'); return; }
+      if (!S.st.enginesOk) { toast('ابتدا موتور sing-box را از بخش «موتورها» نصب کنید', 'warn'); navigate('engines'); return; }
       await API.call('Connect');
     }
   } catch (e) {
@@ -132,7 +132,7 @@ async function toggleConnect() {
 // ---------- global events ----------
 document.addEventListener('click', e => {
   const nav = e.target.closest('[data-nav]');
-  if (nav) { go(nav.dataset.nav); return; }
+  if (nav) { navigate(nav.dataset.nav); return; }
   const w = e.target.closest('.wbtn');
   if (w) {
     const a = w.dataset.act;
@@ -185,4 +185,7 @@ API.on('appUpdateProgress', p => { const el = document.getElementById('appUpBar'
 
 window.addEventListener('resize', () => { if (S.page === 'home') Pages.homeTraffic(); });
 
-refresh().then(() => { loadEngines(); });
+renderRail();
+refresh().then(() => { loadEngines(); }).catch(e => {
+  document.getElementById('view').innerHTML = `<div class="empty"><b>ارتباط با هسته برنامه برقرار نشد</b><span class="ltr" style="user-select:text">${esc(errText(e))}</span><br><button class="btn primary" onclick="location.reload()">تلاش دوباره</button></div>`;
+});

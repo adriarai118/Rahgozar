@@ -1,7 +1,7 @@
 // Bridge to the Go backend (Wails). When opened in a plain browser a mock
 // backend is used so the interface can be previewed.
 (function () {
-  const real = !!(window.go && window.go.main && window.go.main.App);
+  const real = !!(window.go && window.go.desk && window.go.desk.App);
   const listeners = {};
 
   function on(name, fn) {
@@ -11,7 +11,7 @@
   function emit(name, data) { (listeners[name] || []).forEach(f => f(data)); }
 
   async function call(method, ...args) {
-    if (real) return window.go.main.App[method](...args);
+    if (real) return window.go.desk.App[method](...args);
     return mock[method] ? mock[method](...args) : null;
   }
 

@@ -1,4 +1,4 @@
-package main
+package desk
 
 import (
 	"context"
@@ -659,3 +659,6 @@ func (a *App) Quit() {
 }
 
 func goos() string { return goruntime.GOOS }
+
+// Hooks returns the Wails lifecycle callbacks (kept off the JS bindings).
+func Hooks(a *App) (startup, shutdown func(context.Context)) { return a.startup, a.shutdown }
