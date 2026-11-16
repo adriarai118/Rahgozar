@@ -300,6 +300,11 @@ func Build(in *Input) (*Result, error) {
 			tun["address"] = []string{"172.19.0.1/30", "fdfe:dcba:9876::1/126"}
 		}
 		if in.OS == "android" {
+			// Our own package is excluded from the VPN (see below), so the
+			// "system"/"mixed" stacks can't work: their kernel-side TCP
+			// listener answers from our UID and the replies leave via the
+			// physical network instead of the tun. gVisor keeps it in-process.
+			tun["stack"] = "gvisor"
 			// per-app tunnel; our own app (probes, in-process Xray) never enters it
 			var apps []string
 			for _, a := range st.PerAppList {

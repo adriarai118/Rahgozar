@@ -739,7 +739,7 @@ Pages.settings = function () {
   <div class="section"><h2>پروکسی و TUN</h2><div class="panel pad">
     <div class="grid3">
       ${inp('mixedPort', 'پورت محلی SOCKS/HTTP', 1, 'number')}
-      ${sel('tunStack', 'پشته TUN', [['mixed', 'mixed (پیشنهادی)'], ['system', 'system'], ['gvisor', 'gvisor']])}
+      <div class="win-only">${sel('tunStack', 'پشته TUN', [['mixed', 'mixed (پیشنهادی)'], ['system', 'system'], ['gvisor', 'gvisor']])}</div>
       ${inp('tunMtu', 'MTU کارت TUN', 1, 'number')}
     </div>
     <div class="win-only">${switchRow('setSystemProxy', s.setSystemProxy, 'تنظیم پروکسی ویندوز در حالت پروکسی', 'مرورگرها و برنامه‌هایی که از پروکسی سیستم پیروی می‌کنند')}</div>
