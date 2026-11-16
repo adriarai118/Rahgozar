@@ -70,8 +70,37 @@ async function updateActive() {
 chrome.tabs.onActivated.addListener(({ tabId }) => chrome.tabs.get(tabId, t => !chrome.runtime.lastError && updateBadge(tabId, t.url)));
 chrome.tabs.onUpdated.addListener((tabId, ch, tab) => { if (ch.url || ch.status === 'complete') updateBadge(tabId, tab.url); });
 
+// ---------- self update ----------
+// The app updater refreshes the "extension" folder next to Rahgozar.exe. An
+// unpacked extension keeps running its old code until it is reloaded, so we
+// reload ourselves when the folder on disk is newer than what is running.
+function newer(a, b) {
+  const pa = String(a || '0').split('.').map(Number), pb = String(b || '0').split('.').map(Number);
+  for (let i = 0; i < 3; i++) { if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0); }
+  return false;
+}
+async function checkSelfUpdate() {
+  let ping;
+  try { ping = await RG.req('/api/ping', { timeout: 4000 }); } catch (e) { return; }
+  const running = chrome.runtime.getManifest().version;
+  if (!ping.extVersion || !newer(ping.extVersion, running)) {
+    await chrome.storage.local.remove('reloadTried');
+    return;
+  }
+  const { reloadTried } = await chrome.storage.local.get('reloadTried');
+  if (reloadTried !== ping.extVersion) {
+    await chrome.storage.local.set({ reloadTried: ping.extVersion });
+    chrome.runtime.reload();
+    return;
+  }
+  // reloading did not help: the extension was loaded from another folder
+  await chrome.storage.local.set({ updateHint: ping.extVersion });
+}
+
 chrome.alarms.create('rg-status', { periodInMinutes: 0.5 });
+chrome.alarms.create('rg-update', { periodInMinutes: 10 });
 chrome.alarms.onAlarm.addListener(async a => {
+  if (a.name === 'rg-update') { checkSelfUpdate(); return; }
   if (a.name !== 'rg-status') return;
   const prev = lastStatus && lastStatus.state;
   await refreshStatus();
@@ -152,6 +181,7 @@ chrome.commands.onCommand.addListener(async cmd => {
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   (async () => {
     if (msg.type === 'refresh') { siteCache.clear(); await refreshStatus(); await updateActive(); reply({ ok: true }); }
+    else if (msg.type === 'checkUpdate') { await checkSelfUpdate(); reply({ ok: true }); }
     else if (msg.type === 'syncProxy') { await refreshStatus(); reply({ ok: true }); }
     else reply({});
   })();
@@ -159,3 +189,4 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 });
 
 refreshStatus().then(updateActive);
+checkSelfUpdate();

@@ -159,7 +159,7 @@ func readBody(r *http.Request, v any) error {
 }
 
 func (x *extAPI) ping(r *http.Request) (any, error) {
-	return map[string]any{"app": "rahgozar", "version": core.Version}, nil
+	return map[string]any{"app": "rahgozar", "version": core.Version, "extVersion": x.app.extensionVersion()}, nil
 }
 
 // pairing: extension asks, user approves inside the app, extension polls.

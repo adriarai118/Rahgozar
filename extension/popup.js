@@ -96,6 +96,7 @@ function render() {
   const err = st.state === 'error' && st.error ? `<div class="err">${esc(st.error)}</div>` : '';
   const srv = st.state === 'connected' ? `${st.country ? flag(st.country) + ' ' : ''}${esc(st.profileName || '')}${st.latency > 0 ? ' · ' + fa(st.latency) + 'ms' : ''}` : (st.message ? esc(st.message) : (st.enginesOk ? 'برای اتصال روی دروازه کلیک کنید' : 'موتورها نصب نیستند؛ برنامه را باز کنید'));
   root.innerHTML = `
+    ${P.updateHint ? `<div class="notice">نسخه ${esc(P.updateHint)} اکستنشن کنار برنامه آماده است ولی این اکستنشن از پوشه دیگری نصب شده. در chrome://extensions آن را حذف کنید و پوشه <b>extension</b> کنار Rahgozar.exe را Load unpacked کنید تا از این به بعد خودکار به‌روز شود.</div>` : ''}
     <div class="conn">
       <button class="gate" id="gate" data-state="${esc(st.state)}" title="اتصال / قطع (Alt+Shift+R)">${GATE}</button>
       <div class="conn-txt"><b>${stateText(st)}</b><div class="srv">${srv}</div>${err}
@@ -175,7 +176,10 @@ async function loadServers() {
 
 let poll = null;
 async function load() {
+  chrome.runtime.sendMessage({ type: 'checkUpdate' });
   P.cfg = await RG.cfg();
+  const { updateHint } = await chrome.storage.local.get('updateHint');
+  P.updateHint = updateHint && updateHint !== chrome.runtime.getManifest().version ? updateHint : '';
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   P.tab = tab || null;
   P.host = tab ? RG.hostOf(tab.url) : '';

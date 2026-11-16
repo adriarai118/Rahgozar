@@ -109,3 +109,4 @@ select.sel { height: 32px; border-radius: 8px; border: 1px solid var(--line); ba
 .state-box p { color: var(--mute); font-size: 12.5px; margin: 0 0 14px; }
 .toast { position: fixed; bottom: 10px; left: 10px; right: 10px; padding: 8px 12px; border-radius: 9px; background: var(--panel-2); border: 1px solid var(--line); font-size: 12.5px; }
 .toast.err { border-color: var(--anar); }
+.notice { margin-bottom: 10px; padding: 9px 11px; border-radius: 10px; background: var(--saffron-soft); color: var(--fg); font-size: 12px; line-height: 1.7; }

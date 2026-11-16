@@ -2,6 +2,7 @@ package desk
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
@@ -660,6 +661,19 @@ func (a *App) CopyText(t string) error { return runtime.ClipboardSetText(a.ctx, 
 
 // OpenDataDir opens the data folder.
 func (a *App) OpenDataDir() error { return sys.OpenPath(a.dataDir) }
+
+// extensionVersion reads the version of the extension folder next to the app.
+func (a *App) extensionVersion() string {
+	b, err := os.ReadFile(filepath.Join(a.appDir, "extension", "manifest.json"))
+	if err != nil {
+		return ""
+	}
+	var m struct {
+		Version string `json:"version"`
+	}
+	json.Unmarshal(b, &m)
+	return m.Version
+}
 
 // OpenExtensionDir opens the bundled browser extension folder.
 func (a *App) OpenExtensionDir() error {

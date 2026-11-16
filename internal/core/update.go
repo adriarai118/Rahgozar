@@ -144,10 +144,18 @@ func (c *Core) ApplyAppUpdate(u *AppUpdate, progress func(float64)) error {
 				break
 			}
 		}
-		zr.Close()
 		if !found {
+			zr.Close()
 			return errors.New("فایل برنامه داخل بسته آپدیت پیدا نشد")
 		}
+		// browser extension and bundled rule-sets travel with the app
+		for _, sub := range []string{"extension", "rules"} {
+			if err := extractSubdir(zr, sub, filepath.Join(dir, sub)); err != nil {
+				zr.Close()
+				return fmt.Errorf("%s: %w", sub, err)
+			}
+		}
+		zr.Close()
 	}
 	old := exe + ".old"
 	os.Remove(old)
@@ -159,6 +167,76 @@ func (c *Core) ApplyAppUpdate(u *AppUpdate, progress func(float64)) error {
 		return err
 	}
 	os.Chmod(exe, 0o755)
+	return nil
+}
+
+// extractSubdir copies every file under "<sub>/" in the archive (at any
+// depth, e.g. "Rahgozar/extension/...") into dst, replacing old files.
+func extractSubdir(zr *zip.ReadCloser, sub, dst string) error {
+	var files []*zip.File
+	prefix := ""
+	for _, zf := range zr.File {
+		n := strings.ReplaceAll(zf.Name, "\\", "/")
+		i := strings.Index("/"+n, "/"+sub+"/")
+		if i < 0 || zf.FileInfo().IsDir() {
+			continue
+		}
+		if prefix == "" {
+			prefix = n[:i+len(sub)+1]
+		}
+		if strings.HasPrefix(n, prefix) {
+			files = append(files, zf)
+		}
+	}
+	if len(files) == 0 {
+		return nil
+	}
+	stage := dst + ".new"
+	os.RemoveAll(stage)
+	for _, zf := range files {
+		rel := strings.TrimPrefix(strings.ReplaceAll(zf.Name, "\\", "/"), prefix)
+		if rel == "" || strings.Contains(rel, "..") {
+			continue
+		}
+		out := filepath.Join(stage, filepath.FromSlash(rel))
+		os.MkdirAll(filepath.Dir(out), 0o755)
+		rc, err := zf.Open()
+		if err != nil {
+			return err
+		}
+		f, err := os.Create(out)
+		if err != nil {
+			rc.Close()
+			return err
+		}
+		_, err = io.Copy(f, rc)
+		f.Close()
+		rc.Close()
+		if err != nil {
+			return err
+		}
+	}
+	old := dst + ".old"
+	os.RemoveAll(old)
+	if _, err := os.Stat(dst); err == nil {
+		if err := os.Rename(dst, old); err != nil {
+			// folder in use (e.g. a browser has it open): overwrite file by file
+			defer os.RemoveAll(stage)
+			return filepath.Walk(stage, func(p string, fi os.FileInfo, err error) error {
+				if err != nil || fi.IsDir() {
+					return err
+				}
+				rel, _ := filepath.Rel(stage, p)
+				os.MkdirAll(filepath.Dir(filepath.Join(dst, rel)), 0o755)
+				return copyFileTo(p, filepath.Join(dst, rel))
+			})
+		}
+	}
+	if err := os.Rename(stage, dst); err != nil {
+		os.Rename(old, dst)
+		return err
+	}
+	os.RemoveAll(old)
 	return nil
 }
 
