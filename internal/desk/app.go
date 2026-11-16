@@ -465,6 +465,19 @@ func (a *App) DeleteProfiles(ids []string) error {
 	return a.store.DeleteProfiles(ids)
 }
 
+// DeleteDead removes servers whose latest test failed (ids come from the UI's
+// test results); the selected/connected server is kept.
+func (a *App) DeleteDead(ids []string) (int, error) {
+	res := make([]core.TestResult, 0, len(ids))
+	for _, id := range ids {
+		res = append(res, core.TestResult{ID: id})
+	}
+	return a.core.RemoveDead(res, false)
+}
+
+// PruneProfiles tests the servers and removes the dead ones (blocking).
+func (a *App) PruneProfiles(ids []string) (int, error) { return a.core.PruneDead(ids) }
+
 // DuplicateProfile copies a profile.
 func (a *App) DuplicateProfile(id string) error {
 	p := a.store.Profile(id)

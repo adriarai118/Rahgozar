@@ -106,6 +106,7 @@
     ImportFiles: async () => ({ added: 1, errors: [] }),
     SaveProfile: async p => { if (!p.id) { p.id = 'n' + Date.now(); state.profiles.push(p); } return p; },
     DeleteProfiles: async ids => { state.profiles = state.profiles.filter(p => !ids.includes(p.id)); },
+    DeleteDead: async ids => { state.profiles = state.profiles.filter(p => !ids.includes(p.id)); return ids.length; },
     DuplicateProfile: async () => {},
     CopyLink: async () => {},
     TestProfiles: async ids => {

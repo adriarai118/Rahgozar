@@ -46,7 +46,80 @@ func (c *Core) UpdateSubscription(id string) (int, error) {
 	}
 	c.Store.UpsertSub(sub)
 	c.Emit("subs", nil)
+	if err == nil && sub.AutoPrune {
+		go func() {
+			if k, perr := c.PruneDead(c.groupIDs(sub.ID)); perr != nil {
+				c.Log("subs", sub.Name+": prune skipped: "+perr.Error())
+			} else if k > 0 {
+				c.Log("subs", fmt.Sprintf("%s: removed %d dead servers", sub.Name, k))
+			}
+		}()
+	}
 	return n, err
+}
+
+func (c *Core) groupIDs(group string) []string {
+	var ids []string
+	for _, p := range c.Store.Profiles() {
+		if p.Group == group {
+			ids = append(ids, p.ID)
+		}
+	}
+	return ids
+}
+
+// ErrAllDead is returned by PruneDead when every tested server failed, which
+// almost always means the network is down rather than the servers.
+var ErrAllDead = errors.New("همه سرورها قطع بودند؛ احتمالاً اینترنت یا شبکه مشکل دارد، چیزی حذف نشد")
+
+// PruneDead tests the given servers and removes the ones that failed.
+// The selected and the connected server are never removed.
+func (c *Core) PruneDead(ids []string) (int, error) {
+	return c.RemoveDead(c.TestProfiles(ids), true)
+}
+
+// RemoveDead deletes servers whose test failed. With guardAll it refuses
+// when every tested server failed.
+func (c *Core) RemoveDead(res []TestResult, guardAll bool) (int, error) {
+	keep := map[string]bool{c.Store.Settings().SelectedID: true, c.Status().ProfileID: true}
+	var dead []string
+	tested := 0
+	for _, r := range res {
+		if r.NA {
+			continue
+		}
+		tested++
+		if !r.OK && !keep[r.ID] {
+			dead = append(dead, r.ID)
+		}
+	}
+	if tested == 0 || len(dead) == 0 {
+		return 0, nil
+	}
+	if guardAll && len(dead) >= tested && tested > 1 {
+		return 0, ErrAllDead
+	}
+	c.Learner.Forget(dead)
+	if err := c.Store.DeleteProfiles(dead); err != nil {
+		return 0, err
+	}
+	c.recountSubs()
+	c.Emit("profiles", nil)
+	return len(dead), nil
+}
+
+func (c *Core) recountSubs() {
+	n := map[string]int{}
+	for _, p := range c.Store.Profiles() {
+		n[p.Group]++
+	}
+	for _, s := range c.Store.Subscriptions() {
+		if s.Count != n[s.ID] {
+			s.Count = n[s.ID]
+			c.Store.UpsertSub(s)
+		}
+	}
+	c.Emit("subs", nil)
 }
 
 func (c *Core) fetchSub(sub *model.Subscription) (int, error) {

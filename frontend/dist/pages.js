@@ -251,10 +251,17 @@ Pages.servers = function () {
     <div class="search grow">${icon('search')}<input class="input" id="q" placeholder="جستجو در نام، آدرس یا پروتکل" value="${esc(S.query)}"></div>
     <button class="btn" id="testAll" ${S.testing ? 'disabled' : ''}>${icon('bolt')}${S.testing ? 'در حال تست…' : 'تست ' + (S.selected.size ? 'انتخاب‌شده‌ها' : 'همه')}</button>
     <button class="btn" id="sortBest">مرتب‌سازی بر اساس کیفیت</button>
+    ${!S.testing && deadProfiles().length ? `<button class="btn danger" id="delDead" title="سرورهایی که در آخرین تست جواب ندادند">${icon('trash')}حذف قطع‌ها (${fa(deadProfiles().length)})</button>` : ''}
     ${S.selected.size ? `<button class="btn" id="mkChain">${icon('chain')}زنجیره</button><button class="btn danger" id="delSel">${icon('trash')}حذف ${fa(S.selected.size)}</button>` : ''}
   </div>
   <div class="rows" id="rows">${list.length ? list.map(rowHTML).join('') : emptyServers()}</div>`;
 };
+
+// servers in the current view whose latest test failed (selected/connected kept)
+function deadProfiles() {
+  const keep = new Set([S.st.settings.selectedId, (S.st.status || {}).profileId]);
+  return filteredProfiles().filter(p => { const t = S.tests[p.id]; return t && !t.running && !t.ok && !t.na && !keep.has(p.id); });
+}
 
 function subStrip(s) {
   const used = (s.upload || 0) + (s.download || 0);
@@ -308,6 +315,20 @@ Pages.serversMount = function (v) {
   };
   const ch = v.querySelector('#mkChain');
   if (ch) ch.onclick = () => openEditor({ type: 'chain', chain: [...S.selected], name: 'زنجیره' });
+  const dd = v.querySelector('#delDead');
+  if (dd) dd.onclick = async () => {
+    const dead = deadProfiles();
+    const tested = filteredProfiles().filter(p => { const t = S.tests[p.id]; return t && !t.running && !t.na; }).length;
+    const all = dead.length >= tested && tested > 1;
+    const msg = (all ? 'همه سرورهای تست‌شده قطع بودند؛ شاید اینترنت یا شبکه مشکل داشته باشد.\n' : '') + fa(dead.length) + ' سروری که در آخرین تست جواب ندادند حذف شوند؟';
+    if (!await confirmBox('حذف سرورهای قطع', msg, 'حذف', true)) return;
+    try {
+      const n = await API.call('DeleteDead', dead.map(p => p.id));
+      dead.forEach(p => { delete S.tests[p.id]; S.selected.delete(p.id); });
+      toast(fa(n) + ' سرور قطع حذف شد', 'ok');
+    } catch (err) { toast(errText(err), 'error'); }
+    reload();
+  };
   const ds = v.querySelector('#delSel');
   if (ds) ds.onclick = async () => {
     if (!await confirmBox('حذف سرورها', fa(S.selected.size) + ' سرور حذف شود؟', 'حذف', true)) return;
@@ -349,16 +370,21 @@ function openSubEditor(sub) {
     </div>
     ${switchRow('autoUpdate', s.autoUpdate, 'به‌روزرسانی خودکار', '')}
     ${switchRow('viaProxy', s.viaProxy, 'دریافت از داخل تونل', 'اگر آدرس اشتراک فیلتر است روشن بماند')}
+    ${switchRow('autoPrune', s.autoPrune, 'حذف خودکار سرورهای قطع', 'بعد از هر به‌روزرسانی، سرورها تست و قطع‌ها حذف می‌شوند (اگر همه قطع باشند چیزی حذف نمی‌شود)')}
   </div><footer><button class="btn primary" data-ok>${sub ? 'ذخیره' : 'افزودن و دریافت'}</button><button class="btn ghost" data-no>انصراف</button></footer></div>`, m => {
     m.querySelector('[data-no]').onclick = Modal.close;
     m.querySelector('[data-ok]').onclick = async () => {
       const f = n => m.querySelector(`[name=${n}]`);
       try {
         if (sub) {
-          await API.call('SaveSubscription', Object.assign({}, sub, { name: f('name').value, url: f('url').value.trim(), intervalH: +f('intervalH').value, userAgent: f('userAgent').value, autoUpdate: f('autoUpdate').checked, viaProxy: f('viaProxy').checked }));
+          await API.call('SaveSubscription', Object.assign({}, sub, { name: f('name').value, url: f('url').value.trim(), intervalH: +f('intervalH').value, userAgent: f('userAgent').value, autoUpdate: f('autoUpdate').checked, viaProxy: f('viaProxy').checked, autoPrune: f('autoPrune').checked }));
         } else {
           toast('در حال دریافت اشتراک…', 'info');
           const r = await API.call('AddSubscription', f('name').value, f('url').value.trim());
+          if (f('autoPrune').checked && r && r.id) {
+            await API.call('SaveSubscription', Object.assign({}, r, { intervalH: +f('intervalH').value || 12, userAgent: f('userAgent').value, autoUpdate: f('autoUpdate').checked, viaProxy: f('viaProxy').checked, autoPrune: true }));
+            API.call('UpdateSubscription', r.id);
+          }
           toast(fa(r.count || 0) + ' سرور از اشتراک دریافت شد', 'ok');
         }
         Modal.close();

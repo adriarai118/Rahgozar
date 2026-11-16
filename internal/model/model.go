@@ -166,6 +166,7 @@ type Subscription struct {
 	Count      int    `json:"count"`
 	UserAgent  string `json:"userAgent,omitempty"`
 	ViaProxy   bool   `json:"viaProxy"`
+	AutoPrune  bool   `json:"autoPrune,omitempty"` // test after each update and drop dead servers
 	Upload     int64  `json:"upload,omitempty"`
 	Download   int64  `json:"download,omitempty"`
 	Total      int64  `json:"total,omitempty"`
