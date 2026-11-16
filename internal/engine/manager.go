@@ -426,9 +426,8 @@ func (m *Manager) update(s *Spec) error {
 		os.MkdirAll(stage, 0o755)
 		for i, f := range s.files {
 			sources := []string{
-				"https://github.com/" + s.Repo + "/releases/latest/download/" + f,
-				"https://cdn.jsdelivr.net/gh/" + s.Repo + "@rule-set/" + f,
 				"https://raw.githubusercontent.com/" + s.Repo + "/rule-set/" + f,
+				"https://cdn.jsdelivr.net/gh/" + s.Repo + "@rule-set/" + f,
 			}
 			var lastErr error
 			ok := false

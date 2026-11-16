@@ -32,7 +32,7 @@ jobs:
         run: |
           mkdir -p pkg/rules
           for f in geoip-ir geosite-ir geosite-category-ads-all geosite-malware geosite-phishing; do
-            curl -fsSL -o pkg/rules/$f.srs "https://github.com/Chocolate4U/Iran-sing-box-rules/releases/latest/download/$f.srs"
+            curl -fsSL -o pkg/rules/$f.srs "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/$f.srs"
           done
           date +%Y%m%d%H%M > pkg/rules/version.txt
       - name: Zip
