@@ -8,6 +8,7 @@ import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -153,8 +154,36 @@ class GoHost(private val ctx: Context) : Host {
         return out.toString()
     }
 
+    /**
+     * The physical network the device would use without our VPN. Once the
+     * tunnel is up, cm.activeNetwork / the default-network callback return the
+     * VPN itself (tun0); reporting that to sing-box makes it bind outbound
+     * sockets to the tunnel and loop.
+     */
+    private fun underlying(exclude: Network? = null): Network? {
+        fun ok(n: Network): Boolean {
+            if (n == exclude) return false
+            val c = cm.getNetworkCapabilities(n) ?: return false
+            if (c.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return false
+            if (!c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return false
+            return cm.getLinkProperties(n)?.interfaceName != null
+        }
+        cm.activeNetwork?.let { if (ok(it)) return it }
+        val all = cm.allNetworks.filter { ok(it) }
+        fun score(n: Network): Int {
+            val c = cm.getNetworkCapabilities(n) ?: return 0
+            var v = 0
+            if (c.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) v += 100
+            if (c.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) v += 30
+            if (c.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) v += 20
+            if (c.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) v += 10
+            return v
+        }
+        return all.maxByOrNull { score(it) }
+    }
+
     override fun networkName(): String {
-        val n = cm.activeNetwork ?: return ""
+        val n = underlying() ?: return ""
         val caps = cm.getNetworkCapabilities(n) ?: return ""
         return when {
             caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> {
@@ -171,42 +200,50 @@ class GoHost(private val ctx: Context) : Host {
         }.trim()
     }
 
-    // ---------------- default network monitor ----------------
+    // ---------------- default (physical) network monitor ----------------
 
     private var callback: ConnectivityManager.NetworkCallback? = null
+    @Volatile private var lastReport = "?"
 
-    private fun report(network: Network?) {
-        if (network == null) {
-            Gocore.updateDefaultInterface("", -1, false, false)
+    private fun refresh(gone: Network? = null) {
+        val n = underlying(gone)
+        if (n == null) {
+            if (lastReport != "") { lastReport = ""; Gocore.updateDefaultInterface("", -1, false, false) }
             return
         }
-        val lp: LinkProperties = cm.getLinkProperties(network) ?: return
-        val caps = cm.getNetworkCapabilities(network)
+        val lp: LinkProperties = cm.getLinkProperties(n) ?: return
+        val caps = cm.getNetworkCapabilities(n)
         val name = lp.interfaceName ?: return
         val idx = try { NetworkInterface.getByName(name)?.index ?: -1 } catch (e: Exception) { -1 }
         val metered = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) == false
+        val key = "$name/$idx/$metered"
+        if (key == lastReport) return
+        lastReport = key
         Gocore.updateDefaultInterface(name, idx, metered, false)
     }
 
     override fun startNetworkMonitor() {
         if (callback != null) return
+        lastReport = "?"
         val cb = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) = report(network)
-            override fun onLinkPropertiesChanged(network: Network, lp: LinkProperties) = report(network)
-            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = report(network)
-            override fun onLost(network: Network) = report(null)
+            override fun onAvailable(network: Network) = refresh()
+            override fun onLinkPropertiesChanged(network: Network, lp: LinkProperties) = refresh()
+            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = refresh()
+            override fun onLost(network: Network) = refresh(network)
         }
         callback = cb
+        // all non-VPN internet networks (NetworkRequest excludes VPNs by default)
+        val req = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+            .build()
         try {
-            if (Build.VERSION.SDK_INT >= 28) {
-                cm.registerDefaultNetworkCallback(cb, App.main)
-            } else {
-                cm.registerDefaultNetworkCallback(cb)
-            }
+            if (Build.VERSION.SDK_INT >= 26) cm.registerNetworkCallback(req, cb, App.main)
+            else cm.registerNetworkCallback(req, cb)
         } catch (e: Exception) {
             Log.w("Rahgozar", "network callback", e)
         }
-        App.io.execute { report(cm.activeNetwork) }
+        App.io.execute { refresh() }
     }
 
     override fun stopNetworkMonitor() {
