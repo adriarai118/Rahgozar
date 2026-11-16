@@ -32,7 +32,7 @@
 go mod tidy
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags desktop,production -ldflags "-H windowsgui -s -w" -o Rahgozar.exe .
 ```
-با push یک تگ `v*`، workflow موجود در `.github/workflows/release.yml` فایل zip را می‌سازد و در Releases منتشر می‌کند؛ آپدیت داخل برنامه از همین مخزن (تنظیمات ← مخزن آپدیت) خوانده می‌شود.
+برای انتشار نسخه جدید، عدد داخل فایل `VERSION` را بالا ببرید و push کنید؛ workflow موجود در `.github/workflows/release.yml` فایل zip را می‌سازد و با تگ `v<نسخه>` در Releases منتشر می‌کند؛ آپدیت داخل برنامه از همین مخزن (تنظیمات ← مخزن آپدیت) خوانده می‌شود.
 
 ## ساختار
 - `internal/parser` — خواندن لینک‌ها و فایل‌ها

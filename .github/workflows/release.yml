@@ -2,6 +2,8 @@ name: release
 
 on:
   push:
+    branches: [main]
+    paths: ["VERSION"]
     tags: ["v*"]
   workflow_dispatch:
 
@@ -22,8 +24,8 @@ jobs:
           go test ./internal/parser/ ./internal/smart/ ./internal/engine/
       - name: Build Rahgozar.exe
         run: |
-          VER="${GITHUB_REF_NAME#v}"
-          [ "$GITHUB_REF_TYPE" = "tag" ] || VER="0.0.0-dev"
+          VER="$(cat VERSION | tr -d '[:space:]')"
+          echo "VER=$VER" >> "$GITHUB_ENV"
           GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -tags desktop,production \
             -ldflags "-H windowsgui -s -w -X rahgozar/internal/core.Version=$VER" -o pkg/Rahgozar.exe .
       - name: Bundle Iran rule-sets
@@ -36,6 +38,8 @@ jobs:
       - name: Zip
         run: cd pkg && zip -r ../Rahgozar-windows-amd64.zip .
       - uses: softprops/action-gh-release@v2
-        if: github.ref_type == 'tag'
         with:
+          tag_name: v${{ env.VER }}
+          name: Rahgozar ${{ env.VER }}
+          target_commitish: ${{ github.sha }}
           files: Rahgozar-windows-amd64.zip
