@@ -78,6 +78,7 @@ jobs:
           go mod tidy
           go get golang.org/x/mobile/bind@latest
           gomobile init
+          mkdir -p ../android/app/libs
           SB=$(go list -m -f '{{.Version}}' github.com/sagernet/sing-box | sed 's/^v//')
           gomobile bind -v -target android/arm64,android/arm -androidapi 24 -trimpath \
             -tags "with_gvisor,with_quic,with_wireguard,with_utls,with_clash_api,with_openvpn,badlinkname,tfogo_checklinkname0" \
