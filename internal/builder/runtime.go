@@ -305,6 +305,16 @@ func Build(in *Input) (*Result, error) {
 			// listener answers from our UID and the replies leave via the
 			// physical network instead of the tun. gVisor keeps it in-process.
 			tun["stack"] = "gvisor"
+			if st.BypassLAN {
+				// keep LAN out of the VPN so servers on the phone (e.g. a web
+				// UI opened from a PC) can answer local clients directly
+				// 172.16/12 minus 172.19/16, which holds the tun address and DNS
+				ex := []string{"10.0.0.0/8", "172.16.0.0/15", "172.18.0.0/16", "172.20.0.0/14", "172.24.0.0/13", "192.168.0.0/16", "169.254.0.0/16", "100.64.0.0/10", "224.0.0.0/4", "255.255.255.255/32"}
+				if st.IPv6 {
+					ex = append(ex, "fc00::/7", "fe80::/10", "ff00::/8")
+				}
+				tun["route_exclude_address"] = ex
+			}
 			// per-app tunnel; our own app (probes, in-process Xray) never enters it
 			var apps []string
 			for _, a := range st.PerAppList {
