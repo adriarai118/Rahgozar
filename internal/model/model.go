@@ -216,9 +216,11 @@ type Settings struct {
 	FragmentLen     string   `json:"fragmentLen"`
 	FragmentDelay   string   `json:"fragmentDelay"`
 	MuxEnabled      bool     `json:"mux"`
-	ExtAPI          bool     `json:"extApi"`   // local API for the browser extension
-	ExtPort         int      `json:"extPort"`  // 127.0.0.1 port of that API
-	ExtToken        string   `json:"extToken"` // shared secret given to paired extensions
+	ExtAPI          bool     `json:"extApi"`     // local API for the browser extension
+	ExtPort         int      `json:"extPort"`    // 127.0.0.1 port of that API
+	ExtToken        string   `json:"extToken"`   // shared secret given to paired extensions
+	PerAppMode      string   `json:"perAppMode"` // android: off | exclude | include
+	PerAppList      []string `json:"perAppList"` // android package names
 }
 
 // DefaultSettings returns sensible defaults for Iranian networks.

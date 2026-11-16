@@ -40,6 +40,8 @@ type Input struct {
 	ExeName      string   // our own process name
 	EngineExes   []string // helper exe names (bypass in TUN)
 	HasRuleFiles map[string]bool
+	OS           string // runtime.GOOS of the target ("android" changes TUN options)
+	OwnPackage   string // android: our package, always outside the tunnel
 }
 
 // Result of a build.

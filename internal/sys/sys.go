@@ -38,7 +38,11 @@ func NetworkID() (id string, label string) {
 		parts := strings.SplitN(netCache, "|", 2)
 		return parts[0], parts[1]
 	}
-	label = networkLabel()
+	if NetworkNameProvider != nil {
+		label = NetworkNameProvider()
+	} else {
+		label = networkLabel()
+	}
 	if label == "" {
 		label = "default"
 	}
@@ -47,6 +51,9 @@ func NetworkID() (id string, label string) {
 	netCache, netAt = id+"|"+label, time.Now()
 	return id, label
 }
+
+// NetworkNameProvider overrides network detection (Android provides SSID/type).
+var NetworkNameProvider func() string
 
 // Command creates a hidden command (no console window on Windows).
 func Command(name string, args ...string) *exec.Cmd {

@@ -260,7 +260,7 @@ type extStatus struct {
 func (x *extAPI) statusValue() extStatus {
 	a := x.app
 	set := a.store.Settings()
-	_, err := a.eng.ExePath("sing-box")
+	err := a.core.Runner.Available(model.EngineSingBox)
 	st := a.core.Status()
 	st.Mode = set.Mode
 	if st.State == "connected" && a.core.Status().Mode == "system" {
@@ -277,10 +277,10 @@ func (x *extAPI) statusValue() extStatus {
 func (x *extAPI) status(r *http.Request) (any, error) { return x.statusValue(), nil }
 
 func (x *extAPI) connect(r *http.Request) (any, error) {
-	if _, err := x.app.eng.ExePath("sing-box"); err != nil {
+	if err := x.app.core.Runner.Available(model.EngineSingBox); err != nil {
 		return nil, err
 	}
-	if x.app.store.Settings().Mode == "tun" && !sys.IsAdmin() {
+	if x.app.store.Settings().Mode == "tun" && !x.app.core.TunAllowed() {
 		return nil, errors.New("حالت TUN دسترسی مدیر می‌خواهد؛ برنامه رهگذر را با دسترسی مدیر باز کنید")
 	}
 	go x.app.core.Connect()

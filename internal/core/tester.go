@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"rahgozar/internal/builder"
-	"rahgozar/internal/engine"
 	"rahgozar/internal/model"
 	"rahgozar/internal/smart"
 	"rahgozar/internal/sys"
@@ -101,8 +100,7 @@ func (c *Core) TestProfiles(ids []string) []TestResult {
 }
 
 func (c *Core) testSingBox(ps []*model.Profile, set model.Settings, out func(TestResult)) {
-	exe, err := c.Eng.ExePath("sing-box")
-	if err != nil {
+	if err := c.Runner.Available(model.EngineSingBox); err != nil {
 		for _, p := range ps {
 			out(TestResult{ID: p.ID, Error: err.Error()})
 		}
@@ -121,7 +119,7 @@ func (c *Core) testSingBox(ps []*model.Profile, set model.Settings, out func(Tes
 	b, _ := json.Marshal(cfg)
 	os.WriteFile(path, b, 0o600)
 	defer os.Remove(path)
-	proc, err := engine.Start("sing-box(test)", exe, filepath.Dir(exe), []string{"run", "-c", path, "--disable-color"}, nil)
+	proc, err := c.Runner.Start(Job{Name: "sing-box(test)", Engine: model.EngineSingBox, ConfigPath: path, Config: b}, nil)
 	if err != nil {
 		for _, p := range ps {
 			if !skip[p.ID] {
@@ -182,32 +180,27 @@ func (c *Core) testSingBox(ps []*model.Profile, set model.Settings, out func(Tes
 
 func (c *Core) testHelper(p *model.Profile, set model.Settings) TestResult {
 	eng := builder.EngineFor(p)
-	exe, err := c.Eng.ExePath(eng)
-	if err != nil {
+	if err := c.Runner.Available(eng); err != nil {
 		return TestResult{ID: p.ID, Error: err.Error()}
 	}
 	port := FreePort()
 	var cfg []byte
 	name := "xt-" + randomHex(3)
-	var args []string
+	var err error
 	dir := c.runtimeDir()
 	if eng == model.EngineXray {
 		cfg, err = builder.XrayConfig(p, port, "warning")
 		name += ".json"
-		args = []string{"run", "-c", filepath.Join(dir, name)}
 	} else {
 		cfg, err = builder.MihomoConfig(p, port, "warning")
 		name += ".yaml"
-		md := filepath.Join(dir, "mihomo")
-		os.MkdirAll(md, 0o755)
-		args = []string{"-d", md, "-f", filepath.Join(dir, name)}
 	}
 	if err != nil {
 		return TestResult{ID: p.ID, Error: err.Error()}
 	}
 	os.WriteFile(filepath.Join(dir, name), cfg, 0o600)
 	defer os.Remove(filepath.Join(dir, name))
-	proc, err := engine.Start(eng+"(test)", exe, filepath.Dir(exe), args, nil)
+	proc, err := c.Runner.Start(Job{Name: eng + "(test)", Engine: eng, ConfigPath: filepath.Join(dir, name), Config: cfg}, nil)
 	if err != nil {
 		return TestResult{ID: p.ID, Error: err.Error()}
 	}
@@ -270,7 +263,7 @@ func (c *Core) ChooseBest(netID string, exclude map[string]bool) (*model.Profile
 		if p.IsRAS() || p.Type == model.TChain || exclude[p.ID] {
 			continue
 		}
-		if _, err := c.Eng.ExePath(builder.EngineFor(p)); err != nil {
+		if err := c.Runner.Available(builder.EngineFor(p)); err != nil {
 			continue
 		}
 		cands = append(cands, smart.Candidate{ID: p.ID, Family: p.Family()})

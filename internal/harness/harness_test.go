@@ -39,7 +39,7 @@ func TestHarness(t *testing.T) {
 	}
 	js, _ := os.ReadFile(os.Getenv("RTJS"))
 	ipc, _ := os.ReadFile(os.Getenv("IPCJS"))
-	app := desk.NewApp(nil)
+	app := desk.NewApp(desk.Options{})
 	v := reflect.ValueOf(app)
 	methods := map[string]int{}
 	for i := 0; i < v.NumMethod(); i++ {
@@ -112,7 +112,7 @@ func TestExtHarness(t *testing.T) {
 	if os.Getenv("EXTHARNESS") == "" {
 		t.Skip()
 	}
-	app := desk.NewApp(nil)
+	app := desk.NewApp(desk.Options{})
 	var approve func(string)
 	desk.StartHeadless(app, func(n string, d any) {
 		if n == "pairRequest" {

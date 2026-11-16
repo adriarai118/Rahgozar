@@ -71,8 +71,8 @@ Pages.home = function () {
       <button class="picker" id="picker">${pick}${icon('chev')}</button>
       <div class="mode-row">
         <div class="seg" role="group" aria-label="حالت اتصال">
-          <button data-mode="proxy" aria-pressed="${set.mode === 'proxy'}">${icon('proxy')}پروکسی سیستم</button>
-          <button data-mode="tun" aria-pressed="${set.mode === 'tun'}">${icon('tun')}TUN (کل سیستم)</button>
+          <button data-mode="proxy" aria-pressed="${set.mode === 'proxy'}">${icon('proxy')}${isAndroid() ? 'فقط پروکسی محلی' : 'پروکسی سیستم'}</button>
+          <button data-mode="tun" aria-pressed="${set.mode === 'tun'}">${icon('tun')}${isAndroid() ? 'VPN (کل گوشی)' : 'TUN (کل سیستم)'}</button>
         </div>
         <button class="btn sm ghost" data-nav="routing">${icon('routing')}مسیریابی: ${routeName}</button>
       </div>
@@ -104,7 +104,7 @@ function factsHTML() {
   const st = S.st.status, set = S.st.settings;
   const rows = [
     ['شبکه', esc(netName(st.netLabel) || '—')],
-    ['حالت', set.mode === 'tun' ? 'TUN — همه برنامه‌ها' : 'پروکسی سیستم'],
+    ['حالت', set.mode === 'tun' ? (isAndroid() ? 'VPN — همه برنامه‌ها' : 'TUN — همه برنامه‌ها') : (isAndroid() ? 'پروکسی محلی' : 'پروکسی سیستم')],
     ['موتور', esc(st.engine || '—')],
     ['پروتکل', `<span class="ltr">${esc(st.protocol || '—')}</span>`],
     ['پورت محلی', `<span class="ltr num">127.0.0.1:${set.mixedPort}</span>`],
@@ -441,7 +441,7 @@ function fieldHTML(f, p) {
 function editorBody(p) {
   const ras = ['pptp', 'l2tp', 'sstp', 'ikev2'].includes(p.type);
   let h = `<div class="grid2">
-    <label class="field"><span>نوع</span><select class="input" name="type">${TYPES.map(([v, l]) => `<option value="${v}" ${p.type === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label class="field"><span>نوع</span><select class="input" name="type">${TYPES.filter(([v]) => !isAndroid() || !ANDROID_UNSUPPORTED.includes(v)).map(([v, l]) => `<option value="${v}" ${p.type === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
     <label class="field"><span>نام</span><input class="input" name="name" value="${esc(p.name || '')}"></label>`;
   if (p.type === 'chain') {
     const ps = (S.st.profiles || []).filter(x => x.type !== 'chain' && x.engineId === 'sing-box' && x.id !== p.id);
@@ -530,21 +530,26 @@ Pages.routing = function () {
     ${switchRow('blockAds', s.blockAds, 'مسدود کردن تبلیغات و بدافزار', 'با لیست‌های geosite-category-ads-all، malware و phishing')}
     ${switchRow('bypassLan', s.bypassLan, 'شبکه محلی مستقیم', 'آدرس‌های 192.168.x.x، 10.x.x.x و … از تونل نمی‌روند')}
   </div></div>
+  ${isAndroid() ? perAppSection(s) : ''}
   <div class="section"><h2>دامنه‌های شما</h2><div class="grid3" id="rlists">
     ${ta('proxyDomains', 'همیشه از تونل', 'youtube.com', s.proxyDomains)}
     ${ta('directDomains', 'همیشه مستقیم', 'aparat.com', s.directDomains)}
     ${ta('blockDomains', 'مسدود', 'ads.example.com', s.blockDomains)}
   </div>
-  <label class="field" style="margin-top:14px"><span>برنامه‌هایی که در حالت TUN مستقیم بروند</span><textarea class="input ltr" name="directProcesses" placeholder="AnyDesk.exe" style="min-height:70px">${esc((s.directProcesses || []).join('\n'))}</textarea></label>
+  <label class="field win-only" style="margin-top:14px"><span>برنامه‌هایی که در حالت TUN مستقیم بروند</span><textarea class="input ltr" name="directProcesses" placeholder="AnyDesk.exe" style="min-height:70px">${esc((s.directProcesses || []).join('\n'))}</textarea></label>
   <div style="margin-top:12px"><button class="btn primary" id="saveLists">ذخیره لیست‌ها</button></div></div>`;
 };
 
 Pages.routingMount = function (v) {
+  v.querySelectorAll('[data-pam]').forEach(b => b.onclick = async () => { await saveSettings({ perAppMode: b.dataset.pam }); render(); });
+  const pa = v.querySelector('#pickApps');
+  if (pa) pa.onclick = openAppPicker;
   v.querySelectorAll('[data-rm]').forEach(b => b.onclick = async () => { await saveSettings({ routingMode: b.dataset.rm }); render(); });
   v.querySelectorAll('#rgen input[type=checkbox]').forEach(el => el.onchange = () => saveSettings({ [el.name]: el.checked }));
   v.querySelector('#saveLists').onclick = async () => {
     const lines = n => v.querySelector(`[name=${n}]`).value.split(/\n+/).map(x => x.trim()).filter(Boolean);
-    await saveSettings({ proxyDomains: lines('proxyDomains'), directDomains: lines('directDomains'), blockDomains: lines('blockDomains'), directProcesses: lines('directProcesses') });
+    const dp = v.querySelector('[name=directProcesses]');
+    await saveSettings({ proxyDomains: lines('proxyDomains'), directDomains: lines('directDomains'), blockDomains: lines('blockDomains'), directProcesses: dp ? lines('directProcesses') : S.st.settings.directProcesses });
     toast('لیست‌ها ذخیره شد', 'ok');
   };
 };
@@ -608,6 +613,14 @@ function engineCard(e) {
   else if (!e.installed) action = `<button class="btn primary" data-eup="${e.id}">${icon('download')}نصب</button>`;
   else if (e.hasUpdate) action = `<button class="btn primary" data-eup="${e.id}">${icon('download')}به‌روزرسانی به ${latest}</button>`;
   else action = `<button class="btn" data-eup="${e.id}">${icon('refresh')}نصب مجدد آخرین نسخه</button>`;
+  if (e.builtin) {
+    return `<div class="card" data-eng="${e.id}">
+    <h3>${esc(e.name)} <span class="badge ok">داخل برنامه</span></h3>
+    <p>${esc(e.desc)}</p>
+    <div class="ver"><div><span>نسخه: </span><b>${esc(e.version || '?')}</b></div></div>
+    <div class="chips">${(e.protocols || []).map(x => `<span class="badge">${esc(x)}</span>`).join('')}</div>
+    <p class="faint" style="font-size:12px">روی اندروید موتورها داخل خود برنامه‌اند و با آپدیت برنامه به‌روز می‌شوند.</p></div>`;
+  }
   return `<div class="card" data-eng="${e.id}">
     <h3>${esc(e.name)} ${e.required ? '<span class="badge info">ضروری</span>' : ''} ${e.hasUpdate ? '<span class="badge warn">نسخه جدید</span>' : ''}</h3>
     <p>${esc(e.desc)}</p>
@@ -626,7 +639,7 @@ Pages.engines = function () {
   const es = S.engines;
   const u = S.appUpdate;
   return `
-  <div class="page-head"><div><h1>موتورها و به‌روزرسانی</h1><p>هر موتور جداگانه از مخزن رسمی خودش در GitHub به‌روز می‌شود و نسخه قبلی برای بازگشت نگه داشته می‌شود. اگر GitHub کند است، در تنظیمات یک میرور وارد کنید یا فایل را دستی نصب کنید.</p></div>
+  <div class="page-head"><div><h1>موتورها و به‌روزرسانی</h1><p>${isAndroid() ? 'موتورها داخل برنامه‌اند؛ قوانین ایران جداگانه به‌روز می‌شوند. آپدیت برنامه فایل APK جدید را از GitHub دریافت و نصب می‌کند.' : 'هر موتور جداگانه از مخزن رسمی خودش در GitHub به‌روز می‌شود و نسخه قبلی برای بازگشت نگه داشته می‌شود. اگر GitHub کند است، در تنظیمات یک میرور وارد کنید یا فایل را دستی نصب کنید.'}</p></div>
     <div class="actions"><button class="btn" id="checkAll">${icon('refresh')}بررسی همه</button><button class="btn primary" id="updAll">${icon('download')}نصب/به‌روزرسانی همه</button></div></div>
   <div class="panel pad" style="display:flex;gap:14px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
     <div style="flex:1"><b>رهگذر</b> <span class="mute">نسخه <span class="ltr">${esc(S.st.version)}</span>${u ? (u.available ? ' — نسخه ' + esc(u.latest) + ' آماده نصب است' : ' — آخرین نسخه را دارید') : ''}</span>
@@ -641,8 +654,8 @@ Pages.engines = function () {
     <div class="fact"><span>Shadowsocks، SOCKS5، HTTP(S)، SSH، AnyTLS</span><b>sing-box</b></div>
     <div class="fact"><span>Hysteria، Hysteria2، TUIC (QUIC)</span><b>sing-box</b></div>
     <div class="fact"><span>WireGuard، OpenVPN (TCP/UDP)</span><b>sing-box (بدون نیاز به درایور)</b></div>
-    <div class="fact"><span>ShadowsocksR</span><b>Mihomo</b></div>
-    <div class="fact"><span>PPTP، L2TP/IPsec، SSTP، IKEv2</span><b>VPN داخلی ویندوز</b></div>
+    <div class="fact"><span>ShadowsocksR</span><b>${isAndroid() ? 'روی اندروید پشتیبانی نمی‌شود' : 'Mihomo'}</b></div>
+    <div class="fact"><span>PPTP، L2TP/IPsec، SSTP، IKEv2</span><b>${isAndroid() ? 'فقط از تنظیمات VPN خود اندروید' : 'VPN داخلی ویندوز'}</b></div>
     <div class="fact"><span>TUN، DNS، زنجیره پروکسی، مسیریابی</span><b>sing-box</b></div>
   </div></div>`;
 };
@@ -689,13 +702,13 @@ Pages.settings = function () {
   const sel = (k, l, opts) => `<label class="field"><span>${l}</span><select class="input" name="${k}">${opts.map(([v, t]) => `<option value="${v}" ${String(s[k]) === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`;
   return `
   <div class="page-head"><div><h1>تنظیمات</h1><p>تغییرات خودکار ذخیره می‌شوند و اگر وصل باشید، اتصال با تنظیمات جدید از نو برقرار می‌شود.</p></div>
-    <div class="actions"><button class="btn" id="openData">${icon('folder')}پوشه داده‌ها</button></div></div>
-  ${!S.st.admin ? `<div class="banner info"><span class="grow">برنامه بدون دسترسی مدیر اجرا شده؛ حالت TUN و اتصال‌های L2TP/IKEv2 ممکن است کار نکنند.</span><button class="btn sm" id="beAdmin">اجرای مجدد با دسترسی مدیر</button></div>` : ''}
+    <div class="actions win-only"><button class="btn" id="openData">${icon('folder')}پوشه داده‌ها</button></div></div>
+  ${!S.st.admin && !isAndroid() ? `<div class="banner info"><span class="grow">برنامه بدون دسترسی مدیر اجرا شده؛ حالت TUN و اتصال‌های L2TP/IKEv2 ممکن است کار نکنند.</span><button class="btn sm" id="beAdmin">اجرای مجدد با دسترسی مدیر</button></div>` : ''}
   <form id="sform" onsubmit="return false">
   <div class="section"><h2>اتصال هوشمند</h2><div class="panel pad">
     ${switchRow('autoFailover', s.autoFailover, 'تعویض خودکار سرور', 'اگر سرور فعلی سه بار پشت سر هم جواب نداد، بهترین سرور بعدی جایگزین می‌شود')}
     ${switchRow('connectOnStart', s.connectOnStart, 'اتصال خودکار هنگام باز شدن برنامه', '')}
-    ${switchRow('autoStart', s.autoStart, 'اجرا همراه ویندوز', '')}
+    <div class="win-only">${switchRow('autoStart', s.autoStart, 'اجرا همراه ویندوز', '')}</div>
   </div></div>
   <div class="section"><h2>پروکسی و TUN</h2><div class="panel pad">
     <div class="grid3">
@@ -703,7 +716,7 @@ Pages.settings = function () {
       ${sel('tunStack', 'پشته TUN', [['mixed', 'mixed (پیشنهادی)'], ['system', 'system'], ['gvisor', 'gvisor']])}
       ${inp('tunMtu', 'MTU کارت TUN', 1, 'number')}
     </div>
-    ${switchRow('setSystemProxy', s.setSystemProxy, 'تنظیم پروکسی ویندوز در حالت پروکسی', 'مرورگرها و برنامه‌هایی که از پروکسی سیستم پیروی می‌کنند')}
+    <div class="win-only">${switchRow('setSystemProxy', s.setSystemProxy, 'تنظیم پروکسی ویندوز در حالت پروکسی', 'مرورگرها و برنامه‌هایی که از پروکسی سیستم پیروی می‌کنند')}</div>
     ${switchRow('allowLan', s.allowLan, 'اشتراک با دستگاه‌های شبکه', 'گوشی و لپ‌تاپ دیگر می‌توانند از پورت بالا به‌عنوان پروکسی استفاده کنند')}
     ${switchRow('strictRoute', s.strictRoute, 'مسیریابی سخت‌گیرانه در TUN', 'جلوی نشت DNS و ترافیک خارج از تونل را می‌گیرد')}
     ${switchRow('sniff', s.sniff, 'تشخیص دامنه از ترافیک (sniff)', 'برای مسیریابی دقیق‌تر و یادگیری سایت‌ها لازم است')}
@@ -735,7 +748,7 @@ Pages.settings = function () {
     ${sel('theme', 'پوسته', [['dark', 'تیره'], ['light', 'روشن']])}
     ${sel('logLevel', 'سطح گزارش موتورها', [['error', 'فقط خطا'], ['warn', 'هشدار'], ['info', 'اطلاعات'], ['debug', 'جزئیات کامل']])}
   </div></div></div>
-  <div class="section"><h2>اکستنشن مرورگر</h2><div class="panel pad">
+  <div class="section win-only"><h2>اکستنشن مرورگر</h2><div class="panel pad">
     ${switchRow('extApi', s.extApi, 'اجازه اتصال اکستنشن رهگذر', 'فقط روی همین کامپیوتر (127.0.0.1) و فقط برای اکستنشن‌هایی که خودتان تأیید کنید')}
     <div class="grid2" style="margin-top:8px">
       ${inp('extPort', 'پورت ارتباط با اکستنشن', 1, 'number')}
@@ -744,7 +757,7 @@ Pages.settings = function () {
     <p class="mute" style="font-size:12.5px;margin:12px 0 0">برای نصب: در Chrome یا Edge صفحه <span class="ltr">chrome://extensions</span> را باز کنید، «Developer mode» را روشن کنید و پوشه <b>extension</b> کنار Rahgozar.exe را با «Load unpacked» اضافه کنید. سپس در اکستنشن «اتصال به رهگذر» را بزنید و اینجا تأیید کنید.</p>
     <div style="margin-top:10px"><button class="btn sm" type="button" id="openExt">${icon('folder')}باز کردن پوشه اکستنشن</button></div>
   </div></div>
-  <div class="section"><h2>ابزار ویندوز</h2><div class="panel pad">
+  <div class="section win-only"><h2>ابزار ویندوز</h2><div class="panel pad">
     <div class="switch-row"><div class="txt"><b>رفع مشکل L2TP پشت مودم (NAT)</b><small>کلید AssumeUDPEncapsulationContextOnSendRule را تنظیم می‌کند؛ نیاز به دسترسی مدیر و ری‌استارت</small></div><button class="btn sm" type="button" id="fixL2tp">اعمال</button></div>
   </div></div>
   </form>`;
@@ -813,3 +826,55 @@ Pages.logsAppend = function (lines) {
   if (stick) box.scrollTop = box.scrollHeight;
 };
 Pages.connsUpdate = function () { const b = document.getElementById('connBody'); if (b) b.innerHTML = connRows(); };
+
+// =====================================================================
+// ANDROID: per-app tunnel
+// =====================================================================
+function isAndroid() { return (S.st && S.st.os === 'android') || API.android; }
+const ANDROID_UNSUPPORTED = ['pptp', 'l2tp', 'sstp', 'ikev2', 'ssr'];
+
+function perAppSection(s) {
+  const mode = s.perAppMode || 'off';
+  const n = (s.perAppList || []).length;
+  const label = { off: 'همه برنامه‌ها از تونل می‌روند.', exclude: `همه برنامه‌ها به‌جز ${fa(n)} برنامه انتخاب‌شده از تونل می‌روند.`, include: `فقط ${fa(n)} برنامه انتخاب‌شده از تونل می‌روند.` }[mode];
+  return `<div class="section"><h2>برنامه‌ها</h2><div class="panel pad">
+    <div class="seg" role="group" aria-label="تونل برای برنامه‌ها">
+      <button data-pam="off" aria-pressed="${mode === 'off'}">همه</button>
+      <button data-pam="exclude" aria-pressed="${mode === 'exclude'}">به‌جز انتخاب‌شده‌ها</button>
+      <button data-pam="include" aria-pressed="${mode === 'include'}">فقط انتخاب‌شده‌ها</button>
+    </div>
+    <p class="mute" style="margin:10px 0 12px;font-size:13px">${label} مثلاً برنامه‌های بانکی را در «به‌جز» بگذارید تا مستقیم وصل شوند.</p>
+    <button class="btn" id="pickApps" ${mode === 'off' ? 'disabled' : ''}>${icon('servers')}انتخاب برنامه‌ها</button>
+  </div></div>`;
+}
+
+async function openAppPicker() {
+  let apps = [];
+  const chosen = new Set(S.st.settings.perAppList || []);
+  let showSys = false, q = '';
+  const listHTML = () => apps
+    .filter(a => (showSys || !a.system || chosen.has(a.pkg)) && (!q || (a.name + ' ' + a.pkg).toLowerCase().includes(q)))
+    .sort((a, b) => (chosen.has(b.pkg) - chosen.has(a.pkg)) || a.name.localeCompare(b.name, 'fa'))
+    .slice(0, 400)
+    .map(a => `<label class="app-row"><input type="checkbox" class="check" data-pkg="${esc(a.pkg)}" ${chosen.has(a.pkg) ? 'checked' : ''}><span class="nm">${esc(a.name)}<small class="ltr">${esc(a.pkg)}</small></span></label>`).join('')
+    || '<div class="empty">برنامه‌ای پیدا نشد</div>';
+  Modal.open(`<div class="dialog" role="dialog" aria-modal="true"><header><h3>انتخاب برنامه‌ها</h3></header><div class="body">
+    <div class="toolbar"><div class="search grow">${icon('search')}<input class="input" id="aq" placeholder="جستجو"></div>
+      <label class="app-row" style="border:0;padding:0"><input type="checkbox" class="check" id="sys">برنامه‌های سیستمی</label></div>
+    <div class="list-pick" id="al"><div class="empty">در حال خواندن فهرست برنامه‌ها…</div></div></div>
+    <footer><button class="btn primary" data-ok>ذخیره (${'<span id="ac">' + fa(chosen.size) + '</span>'})</button><button class="btn ghost" data-no>انصراف</button></footer></div>`, async m => {
+    const al = m.querySelector('#al');
+    try { apps = (await API.call('AndroidApps')) || []; } catch (e) { al.innerHTML = `<div class="empty">${esc(errText(e))}</div>`; return; }
+    al.innerHTML = listHTML();
+    m.querySelector('#aq').oninput = e => { q = e.target.value.trim().toLowerCase(); al.innerHTML = listHTML(); };
+    m.querySelector('#sys').onchange = e => { showSys = e.target.checked; al.innerHTML = listHTML(); };
+    al.onchange = e => {
+      const pkg = e.target.dataset.pkg;
+      if (!pkg) return;
+      e.target.checked ? chosen.add(pkg) : chosen.delete(pkg);
+      m.querySelector('#ac').textContent = fa(chosen.size);
+    };
+    m.querySelector('[data-no]').onclick = Modal.close;
+    m.querySelector('[data-ok]').onclick = async () => { Modal.close(); await saveSettings({ perAppList: [...chosen] }); render(); toast('ذخیره شد', 'ok'); };
+  });
+}

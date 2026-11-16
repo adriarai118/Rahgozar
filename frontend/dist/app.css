@@ -407,3 +407,80 @@ canvas.spark { width: 100%; height: 130px; display: block; }
 }
 .picker .proto svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 .dialog footer { position: sticky; bottom: 0; background: var(--panel); padding-top: 14px; border-radius: 0 0 16px 16px; }
+
+.app-row { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line-soft); background: var(--rail); cursor: pointer; font-size: 13.5px; }
+.app-row .nm { flex: 1; min-width: 0; }
+.app-row small { display: block; color: var(--faint); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ================= Android / phone layout ================= */
+[data-platform="android"] .win-only { display: none !important; }
+[data-platform="android"] body { user-select: none; -webkit-tap-highlight-color: transparent; }
+[data-platform="android"] #app {
+  grid-template-columns: 1fr;
+  grid-template-rows: 52px 1fr auto;
+  grid-template-areas: "title" "view" "rail";
+  height: 100vh;
+  height: 100dvh;
+}
+[data-platform="android"] .titlebar { padding-inline: 16px 8px; padding-top: env(safe-area-inset-top); }
+[data-platform="android"] .brand { display: flex; align-items: center; gap: 8px; }
+[data-platform="android"] .brand-mark { width: 24px; height: 24px; color: var(--firouzeh); }
+[data-platform="android"] .brand-name { font-weight: 800; font-size: 18px; }
+[data-platform="android"] .brand-ver { display: none; }
+[data-platform="android"] .title-status { text-align: start; font-size: 12.5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+[data-platform="android"] .wbtn:not([data-act="theme"]) { display: none; }
+[data-platform="android"] .rail {
+  flex-direction: row; padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); gap: 0;
+  border-inline-start: 0; border-top: 1px solid var(--line-soft); overflow-x: auto; scrollbar-width: none;
+}
+[data-platform="android"] .rail::-webkit-scrollbar { display: none; }
+[data-platform="android"] .rail-brand, [data-platform="android"] .rail-foot { display: none; }
+[data-platform="android"] .nav-btn {
+  flex: 1 1 0; min-width: 0; flex-direction: column; gap: 3px; padding: 6px 0; font-size: 10.5px; justify-content: center; border-radius: 10px; white-space: nowrap;
+}
+[data-platform="android"] .nav-btn svg { width: 21px; height: 21px; }
+[data-platform="android"] .nav-btn[aria-current="page"] { background: transparent; color: var(--firouzeh); }
+[data-platform="android"] .nav-btn[aria-current="page"]::before { display: none; }
+[data-platform="android"] .nav-btn .badge { position: absolute; top: 4px; inset-inline-end: calc(50% - 16px); width: 8px; height: 8px; padding: 0; font-size: 0; border-radius: 50%; background: var(--saffron); }
+[data-platform="android"] main#view { padding: 16px 14px 28px; }
+[data-platform="android"] .page-head { margin-bottom: 16px; }
+[data-platform="android"] .page-head h1 { font-size: 22px; }
+[data-platform="android"] .page-head p { font-size: 13px; }
+[data-platform="android"] .page-head .actions { margin-inline-start: 0; width: 100%; }
+[data-platform="android"] .page-head .actions .btn { flex: 1; }
+[data-platform="android"] .home { grid-template-columns: 1fr; gap: 18px; }
+[data-platform="android"] .gate { width: 210px; height: 248px; }
+[data-platform="android"] .gate .label b { font-size: 22px; }
+[data-platform="android"] .mode-row .seg { width: 100%; }
+[data-platform="android"] .mode-row .seg button { flex: 1; justify-content: center; padding: 8px 6px; }
+[data-platform="android"] .stat b { font-size: 18px; }
+[data-platform="android"] canvas.spark { height: 100px; }
+[data-platform="android"] .toolbar .search { min-width: 0; flex: 1 1 100%; }
+[data-platform="android"] .toolbar .btn { flex: 1 1 auto; }
+[data-platform="android"] .row {
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  grid-template-areas: "check name lat" "acts acts acts";
+  gap: 8px 10px; padding: 10px 12px;
+}
+[data-platform="android"] .row > .check { grid-area: check; }
+[data-platform="android"] .row > .ptype { display: none; }
+[data-platform="android"] .row > .name { grid-area: name; }
+[data-platform="android"] .row > .learn-cell { display: none; }
+[data-platform="android"] .row > [data-lat] { grid-area: lat; }
+[data-platform="android"] .row > .acts { grid-area: acts; opacity: 1; justify-content: flex-start; flex-wrap: wrap; border-top: 1px dashed var(--line-soft); padding-top: 6px; }
+[data-platform="android"] .row .name small { text-align: start; }
+[data-platform="android"] .route-modes { grid-template-columns: 1fr 1fr; }
+[data-platform="android"] .minis { grid-template-columns: 1fr 1fr; }
+[data-platform="android"] .grid2, [data-platform="android"] .grid3 { grid-template-columns: 1fr; }
+[data-platform="android"] .span2 { grid-column: auto; }
+[data-platform="android"] .cards { grid-template-columns: 1fr; }
+[data-platform="android"] .hrow { grid-template-columns: 1fr 70px 46px; }
+[data-platform="android"] .hrow .badge { display: none; }
+[data-platform="android"] .hrow .fam { grid-column: 1 / -1; }
+[data-platform="android"] .domain-table td.r, [data-platform="android"] .domain-table th:nth-child(3) { display: none; }
+[data-platform="android"] .modal { padding: 10px; align-items: end; }
+[data-platform="android"] .dialog { width: 100%; max-height: 88vh; border-radius: 18px 18px 12px 12px; }
+[data-platform="android"] .toasts { left: 12px; right: 12px; bottom: calc(80px + env(safe-area-inset-bottom)); max-width: none; }
+[data-platform="android"] .logbox { height: calc(100dvh - 300px); }
+[data-platform="android"] .switch-row .txt small { display: block; }
+[data-platform="android"] .sub-strip { font-size: 12px; }

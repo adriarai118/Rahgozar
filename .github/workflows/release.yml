@@ -6,6 +6,11 @@ on:
     paths: ["VERSION"]
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Publish a GitHub release"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -18,15 +23,15 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26.x"
+          cache: false
       - name: Test
         run: |
           go mod tidy
-          go test ./internal/parser/ ./internal/smart/ ./internal/engine/
+          go test ./internal/parser/ ./internal/smart/ ./internal/engine/ ./internal/geo/
           CGO_ENABLED=0 go test ./internal/desk/
       - name: Build Rahgozar.exe
         run: |
           VER="$(cat VERSION | tr -d '[:space:]')"
-          echo "VER=$VER" >> "$GITHUB_ENV"
           # extension is embedded in the exe: stamp its version first
           sed -i "s/\"version\": \"[0-9.]*\"/\"version\": \"$VER\"/" extension/manifest.json
           GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -tags desktop,production \
@@ -38,12 +43,86 @@ jobs:
             curl -fsSL -o pkg/rules/$f.srs "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/$f.srs"
           done
           date +%Y%m%d%H%M > pkg/rules/version.txt
-      - name: Browser extension
+      - name: Package
         run: |
           cp -r extension pkg/extension
-          (cd extension && zip -r ../Rahgozar-extension.zip .)
-      - name: Zip
-        run: cd pkg && zip -r ../Rahgozar-windows-amd64.zip .
+          (cd extension && zip -qr ../Rahgozar-extension.zip .)
+          (cd pkg && zip -qr ../Rahgozar-windows-amd64.zip .)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            Rahgozar-windows-amd64.zip
+            Rahgozar-extension.zip
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.x"
+          cache: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install gomobile
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+      - name: Build Go core (AAR)
+        working-directory: mobile
+        run: |
+          go get golang.org/x/mobile/bind
+          go mod tidy
+          gomobile init
+          SB=$(go list -m -f '{{.Version}}' github.com/sagernet/sing-box | sed 's/^v//')
+          gomobile bind -v -target android/arm64,android/arm -androidapi 24 -trimpath \
+            -tags "with_gvisor,with_quic,with_wireguard,with_utls,with_clash_api,with_openvpn,badlinkname,tfogo_checklinkname0" \
+            -ldflags "-s -w -checklinkname=0 -X github.com/sagernet/sing-box/constant.Version=$SB" \
+            -o ../android/app/libs/gocore.aar ./gocore
+      - name: Web UI assets
+        run: |
+          mkdir -p android/app/src/main/assets/web
+          cp -r frontend/dist/. android/app/src/main/assets/web/
+      - name: Signing key
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KS_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KS" ]; then
+            echo "$KS" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "RG_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "RG_KEYSTORE_PASSWORD=$KS_PW" >> "$GITHUB_ENV"
+          else
+            echo "::warning::ANDROID_KEYSTORE_B64 secret is missing; the APK is signed with a debug key"
+          fi
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - name: Build APK
+        run: |
+          export RG_VERSION="$(cat VERSION | tr -d '[:space:]')"
+          gradle -p android --no-daemon assembleRelease
+          cp android/app/build/outputs/apk/release/app-release.apk Rahgozar-android.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: Rahgozar-android.apk
+
+  release:
+    needs: [windows, android]
+    if: github.event_name == 'push' || inputs.release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - name: Version
+        run: echo "VER=$(cat VERSION | tr -d '[:space:]')" >> "$GITHUB_ENV"
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VER }}
@@ -52,3 +131,4 @@ jobs:
           files: |
             Rahgozar-windows-amd64.zip
             Rahgozar-extension.zip
+            Rahgozar-android.apk

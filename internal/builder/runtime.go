@@ -211,11 +211,13 @@ func Build(in *Input) (*Result, error) {
 	if in.Mode == "tun" {
 		rules = append(rules, M{"inbound": []string{"tun-in"}, "action": "sniff"})
 		procs := []string{}
-		if in.ExeName != "" {
-			procs = append(procs, in.ExeName)
+		if in.OS != "android" {
+			if in.ExeName != "" {
+				procs = append(procs, in.ExeName)
+			}
+			procs = append(procs, in.EngineExes...)
+			procs = append(procs, st.DirectProcesses...)
 		}
-		procs = append(procs, in.EngineExes...)
-		procs = append(procs, st.DirectProcesses...)
 		if len(procs) > 0 {
 			// before DNS hijack: our own probes and helper engines must see the real network
 			rules = append(rules, M{"process_name": procs, "outbound": "direct"})
@@ -270,7 +272,7 @@ func Build(in *Input) (*Result, error) {
 		"auto_detect_interface":   true,
 		"default_domain_resolver": "dns-direct",
 	}
-	if in.Mode == "tun" {
+	if in.Mode == "tun" && in.OS != "android" {
 		route["find_process"] = true
 	}
 	if len(ruleSets) > 0 {
@@ -297,7 +299,32 @@ func Build(in *Input) (*Result, error) {
 		if st.IPv6 {
 			tun["address"] = []string{"172.19.0.1/30", "fdfe:dcba:9876::1/126"}
 		}
-		tun["interface_name"] = "Rahgozar"
+		if in.OS == "android" {
+			// per-app tunnel; our own app (probes, in-process Xray) never enters it
+			var apps []string
+			for _, a := range st.PerAppList {
+				if a = strings.TrimSpace(a); a != "" && a != in.OwnPackage {
+					apps = append(apps, a)
+				}
+			}
+			switch {
+			case st.PerAppMode == "include" && len(apps) > 0:
+				tun["include_package"] = apps
+			default:
+				ex := []string{}
+				if in.OwnPackage != "" {
+					ex = append(ex, in.OwnPackage)
+				}
+				if st.PerAppMode == "exclude" {
+					ex = append(ex, apps...)
+				}
+				if len(ex) > 0 {
+					tun["exclude_package"] = ex
+				}
+			}
+		} else {
+			tun["interface_name"] = "Rahgozar"
+		}
 		inbounds = append([]M{tun}, inbounds...)
 	}
 

@@ -1,20 +1,14 @@
 package desk
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
-	goruntime "runtime"
-	"strconv"
 	"strings"
 	"time"
-
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"rahgozar/internal/builder"
 	"rahgozar/internal/core"
@@ -27,38 +21,93 @@ import (
 	"rahgozar/internal/sys"
 )
 
-// App is bound to the frontend (window.go.main.App).
+// Platform is what the host (Wails on Windows, the Android app) provides.
+type Platform interface {
+	OS() string
+	Emit(name string, data any)
+	ClipboardGet() (string, error)
+	ClipboardSet(text string) error
+	// PickFiles shows a file chooser; pattern like "*.ovpn;*.conf".
+	PickFiles(title, pattern string, multiple bool) ([]string, error)
+	OpenURL(url string)
+	OpenPath(path string) error
+	Minimise()
+	ToggleMaximise()
+	Focus()
+	Quit()
+	// Relaunch starts a new instance (elevated when admin) and quits this one.
+	Relaunch(admin bool) error
+	// InstallUpdate installs a downloaded app update and restarts.
+	InstallUpdate(c *core.Core, u *core.AppUpdate, progress func(float64)) error
+	// TunAllowed reports whether TUN can start without more privileges.
+	TunAllowed() bool
+}
+
+// Options configure NewApp. Empty fields get desktop defaults.
+type Options struct {
+	DataDir     string
+	AppDir      string
+	EnginesDir  string
+	ExeName     string
+	OwnPackage  string
+	Platform    Platform
+	Runner      core.Runner
+	Builtin     []*engine.Status // engines compiled into the app (Android)
+	NetworkName func() string
+}
+
+// App is bound to the frontend (window.go.desk.App).
 type App struct {
-	ctx     context.Context
+	plat    Platform
 	store   *store.Store
 	eng     *engine.Manager
 	core    *core.Core
 	dataDir string
 	appDir  string
 	update  *core.AppUpdate
-	args    []string
 	api     *extAPI
 	emitFn  func(string, any)
 	geo     *geo.Resolver
+	builtin []*engine.Status
+	ready   bool
 }
 
 // NewApp wires everything together.
-func NewApp(args []string) *App {
-	core.CleanupOldBinary()
-	dataDir := store.DataDir()
-	exe, _ := os.Executable()
-	appDir := filepath.Dir(exe)
-	st := store.Open(dataDir)
-	engDir := filepath.Join(appDir, "engines")
-	if err := os.MkdirAll(engDir, 0o755); err != nil || !writable(engDir) {
-		engDir = filepath.Join(dataDir, "engines")
+func NewApp(o Options) *App {
+	if o.DataDir == "" {
+		core.CleanupOldBinary()
+		o.DataDir = store.DataDir()
 	}
-	eng := engine.NewManager(engDir)
-	eng.SeedRules(filepath.Join(appDir, "rules"))
-	c := core.New(st, eng, dataDir)
-	c.ExeName = filepath.Base(exe)
-	a := &App{store: st, eng: eng, core: c, dataDir: dataDir, appDir: appDir, args: args}
-	a.geo = geo.NewResolver(filepath.Join(dataDir, "geo-cache.json"))
+	exe, _ := os.Executable()
+	if o.AppDir == "" {
+		o.AppDir = filepath.Dir(exe)
+	}
+	if o.ExeName == "" {
+		o.ExeName = filepath.Base(exe)
+	}
+	st := store.Open(o.DataDir)
+	if o.EnginesDir == "" {
+		o.EnginesDir = filepath.Join(o.AppDir, "engines")
+		if err := os.MkdirAll(o.EnginesDir, 0o755); err != nil || !writable(o.EnginesDir) {
+			o.EnginesDir = filepath.Join(o.DataDir, "engines")
+		}
+	}
+	eng := engine.NewManager(o.EnginesDir)
+	eng.SeedRules(filepath.Join(o.AppDir, "rules"))
+	c := core.New(st, eng, o.DataDir)
+	c.ExeName = o.ExeName
+	c.OwnPackage = o.OwnPackage
+	if o.Runner != nil {
+		c.Runner = o.Runner
+	}
+	if o.NetworkName != nil {
+		sys.NetworkNameProvider = o.NetworkName
+	}
+	a := &App{plat: o.Platform, store: st, eng: eng, core: c, dataDir: o.DataDir, appDir: o.AppDir, builtin: o.Builtin}
+	if a.plat != nil {
+		c.TunAllowed = a.plat.TunAllowed
+	}
+	a.geo = geo.NewResolver(filepath.Join(o.DataDir, "geo-cache.json"))
 	a.geo.OnNew = func() {
 		if a.emitFn != nil {
 			a.emitFn("profiles", nil)
@@ -81,20 +130,34 @@ func writable(dir string) bool {
 	return true
 }
 
-func (a *App) startup(ctx context.Context) {
-	a.ctx = ctx
-	a.emitFn = func(name string, data any) { runtime.EventsEmit(ctx, name, data) }
+func (a *App) emit(name string, data any) {
+	if a.emitFn != nil {
+		a.emitFn(name, data)
+	}
+}
+
+// Start initialises background services once the host UI exists.
+func Start(a *App) {
+	if a.ready {
+		return
+	}
+	a.ready = true
+	a.emitFn = a.plat.Emit
 	a.core.Emit = a.emitFn
-	a.eng.OnChange = func(s *engine.Status) { runtime.EventsEmit(ctx, "engine", s) }
+	a.eng.OnChange = func(s *engine.Status) { a.emit("engine", s) }
 	a.core.Init()
 	a.startAPI(a.emitFn)
-	if _, err := a.eng.ExePath("sing-box"); err != nil {
+	if a.core.Runner.Available(model.EngineSingBox) != nil {
 		// first run: fetch the required engines in the background
 		go func() {
 			time.Sleep(2 * time.Second)
-			runtime.EventsEmit(ctx, "toast", map[string]string{"kind": "info", "text": "دریافت خودکار موتورهای لازم از GitHub…"})
+			a.emit("toast", map[string]string{"kind": "info", "text": "دریافت خودکار موتورهای لازم از GitHub…"})
 			a.UpdateAllEngines()
 		}()
+	} else if a.builtin != nil {
+		if s, err := a.eng.ExePath("rules-ir"); err != nil || s == "" {
+			_ = s
+		}
 	}
 	set := a.store.Settings()
 	if set.ConnectOnStart {
@@ -108,10 +171,10 @@ func (a *App) startup(ctx context.Context) {
 			time.Sleep(8 * time.Second)
 			if u, err := a.core.CheckAppUpdate(); err == nil && u.Available {
 				a.update = u
-				runtime.EventsEmit(ctx, "appUpdate", u)
+				a.emit("appUpdate", u)
 			}
 			for _, e := range a.eng.List() {
-				if e.Installed {
+				if e.Installed && (a.builtin == nil || e.Kind == "rules") {
 					a.eng.CheckLatest(e.ID)
 				}
 			}
@@ -119,7 +182,8 @@ func (a *App) startup(ctx context.Context) {
 	}
 }
 
-func (a *App) shutdown(ctx context.Context) {
+// Stop disconnects and saves state (host shutdown).
+func Stop(a *App) {
 	a.core.Disconnect()
 	a.core.SaveLearning()
 }
@@ -170,13 +234,10 @@ func (a *App) views() []*ProfileView {
 
 // GetState returns the full UI state.
 func (a *App) GetState() AppState {
-	sbOK := false
-	if _, err := a.eng.ExePath("sing-box"); err == nil {
-		sbOK = true
-	}
+	sbOK := a.core.Runner.Available(model.EngineSingBox) == nil
 	return AppState{
 		Version: core.Version, Settings: a.store.Settings(), Profiles: a.views(), Subs: a.store.Subscriptions(),
-		Status: a.core.Status(), Admin: sys.IsAdmin(), DataDir: a.dataDir, EnginesOK: sbOK, OS: goos(),
+		Status: a.core.Status(), Admin: a.core.TunAllowed(), DataDir: a.dataDir, EnginesOK: sbOK, OS: a.plat.OS(),
 	}
 }
 
@@ -218,7 +279,7 @@ func needsRestart(a, b model.Settings) bool {
 	k := func(s model.Settings) key {
 		return key{s.Mode, s.RoutingMode, s.RemoteDNS, s.DirectDNS, s.TunStack, s.LogLevel, s.FragmentLen, s.MixedPort, s.TunMTU,
 			s.AllowLAN, s.BypassLAN, s.BypassIran, s.BlockAds, s.FakeIP, s.StrictRoute, s.IPv6, s.Sniff, s.FragmentEnabled, s.MuxEnabled, s.SetSystemProxy,
-			strings.Join(s.DirectProcesses, ",")}
+			strings.Join(s.DirectProcesses, ",") + "|" + s.PerAppMode + "|" + strings.Join(s.PerAppList, ",")}
 	}
 	return k(a) != k(b)
 }
@@ -253,7 +314,7 @@ func (a *App) SetMode(mode string) error {
 	if s.Mode == mode {
 		return nil
 	}
-	if mode == "tun" && !sys.IsAdmin() {
+	if mode == "tun" && !a.core.TunAllowed() {
 		return errors.New("NEED_ADMIN")
 	}
 	s.Mode = mode
@@ -270,12 +331,7 @@ func (a *App) SetRouting(mode string) error {
 // RelaunchAdmin restarts elevated.
 func (a *App) RelaunchAdmin() error {
 	a.core.Disconnect()
-	if err := sys.RelaunchAsAdmin("--wait-pid", strconv.Itoa(os.Getpid())); err != nil {
-		return err
-	}
-	forceExitSoon()
-	runtime.Quit(a.ctx)
-	return nil
+	return a.plat.Relaunch(true)
 }
 
 // ---------------- profiles ----------------
@@ -321,7 +377,7 @@ func (a *App) ImportText(text string) ImportResult {
 
 // ImportClipboard imports from the clipboard.
 func (a *App) ImportClipboard() ImportResult {
-	t, err := runtime.ClipboardGetText(a.ctx)
+	t, err := a.plat.ClipboardGet()
 	if err != nil || strings.TrimSpace(t) == "" {
 		return ImportResult{Errors: []string{"کلیپ‌بورد خالی است"}}
 	}
@@ -330,13 +386,7 @@ func (a *App) ImportClipboard() ImportResult {
 
 // ImportFiles lets the user pick .ovpn/.conf/.txt/.yaml/.json files.
 func (a *App) ImportFiles() ImportResult {
-	files, err := runtime.OpenMultipleFilesDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "وارد کردن کانفیگ",
-		Filters: []runtime.FileFilter{
-			{DisplayName: "VPN configs (*.ovpn;*.conf;*.txt;*.yaml;*.yml;*.json)", Pattern: "*.ovpn;*.conf;*.txt;*.yaml;*.yml;*.json"},
-			{DisplayName: "All files", Pattern: "*.*"},
-		},
-	})
+	files, err := a.plat.PickFiles("وارد کردن کانفیگ", "*.ovpn;*.conf;*.txt;*.yaml;*.yml;*.json", true)
 	if err != nil || len(files) == 0 {
 		return ImportResult{}
 	}
@@ -439,7 +489,7 @@ func (a *App) CopyLink(id string) error {
 	if p.Type == model.TOpenVPN {
 		l = p.OVPN
 	}
-	return runtime.ClipboardSetText(a.ctx, l)
+	return a.plat.ClipboardSet(l)
 }
 
 // TestProfiles runs latency tests (async; results via "test" events).
@@ -493,10 +543,40 @@ func (a *App) DeleteSubscription(id string) error { return a.store.DeleteSub(id)
 // ---------------- engines & updates ----------------
 
 // ListEngines returns component statuses.
-func (a *App) ListEngines() []*engine.Status { return a.eng.List() }
+func (a *App) ListEngines() []*engine.Status {
+	all := a.eng.List()
+	if a.builtin == nil {
+		return all
+	}
+	out := append([]*engine.Status(nil), a.builtin...)
+	for _, e := range all {
+		if e.Kind == "rules" {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+func (a *App) isBuiltin(id string) bool {
+	for _, b := range a.builtin {
+		if b.ID == id {
+			return true
+		}
+	}
+	return false
+}
 
 // CheckEngine checks the latest version of one engine.
-func (a *App) CheckEngine(id string) (*engine.Status, error) { return a.eng.CheckLatest(id) }
+func (a *App) CheckEngine(id string) (*engine.Status, error) {
+	if a.isBuiltin(id) {
+		for _, b := range a.builtin {
+			if b.ID == id {
+				return b, nil
+			}
+		}
+	}
+	return a.eng.CheckLatest(id)
+}
 
 func (a *App) withEngineStopped(id string, f func() error) error {
 	st := a.core.Status()
@@ -514,24 +594,31 @@ func (a *App) withEngineStopped(id string, f func() error) error {
 
 // UpdateEngine downloads the latest version (async, progress via "engine" events).
 func (a *App) UpdateEngine(id string) {
+	if a.isBuiltin(id) {
+		a.emit("toast", map[string]string{"kind": "info", "text": "این موتور داخل برنامه است و با آپدیت خود برنامه به‌روز می‌شود"})
+		return
+	}
 	go func() {
 		err := a.withEngineStopped(id, func() error { return a.eng.Update(id) })
 		if err != nil {
-			runtime.EventsEmit(a.ctx, "toast", map[string]string{"kind": "error", "text": id + ": " + err.Error()})
+			a.emit("toast", map[string]string{"kind": "error", "text": id + ": " + err.Error()})
 		} else {
-			runtime.EventsEmit(a.ctx, "toast", map[string]string{"kind": "ok", "text": id + " به‌روز شد"})
+			a.emit("toast", map[string]string{"kind": "ok", "text": id + " به‌روز شد"})
 		}
-		runtime.EventsEmit(a.ctx, "engines", nil)
+		a.emit("engines", nil)
 	}()
 }
 
 // InstallEngineFromFile installs an engine from a local archive.
 func (a *App) InstallEngineFromFile(id string) error {
-	f, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{Title: "انتخاب فایل " + id,
-		Filters: []runtime.FileFilter{{DisplayName: "Archive / exe (*.zip;*.gz;*.exe;*.srs)", Pattern: "*.zip;*.gz;*.tar.gz;*.exe;*.srs"}}})
-	if err != nil || f == "" {
+	if a.builtin != nil && id != "rules-ir" {
+		return errors.New("این موتور داخل برنامه است و با آپدیت برنامه به‌روز می‌شود")
+	}
+	fs, err := a.plat.PickFiles("انتخاب فایل "+id, "*.zip;*.gz;*.tar.gz;*.exe;*.srs", false)
+	if err != nil || len(fs) == 0 {
 		return err
 	}
+	f := fs[0]
 	return a.withEngineStopped(id, func() error { return a.eng.InstallArchive(id, f) })
 }
 
@@ -543,7 +630,10 @@ func (a *App) RollbackEngine(id string) error {
 // UpdateAllEngines updates every installed (or required) component.
 func (a *App) UpdateAllEngines() {
 	go func() {
-		for _, e := range a.eng.List() {
+		for _, e := range a.ListEngines() {
+			if e.Builtin {
+				continue
+			}
 			if e.Installed && !e.HasUpdate && e.Latest != "" {
 				continue
 			}
@@ -552,7 +642,7 @@ func (a *App) UpdateAllEngines() {
 			}
 			a.withEngineStopped(e.ID, func() error { return a.eng.Update(e.ID) })
 		}
-		runtime.EventsEmit(a.ctx, "engines", nil)
+		a.emit("engines", nil)
 	}()
 }
 
@@ -570,18 +660,7 @@ func (a *App) ApplyAppUpdate() error {
 	if a.update == nil || !a.update.Available {
 		return errors.New("آپدیتی موجود نیست")
 	}
-	err := a.core.ApplyAppUpdate(a.update, func(p float64) { runtime.EventsEmit(a.ctx, "appUpdateProgress", p) })
-	if err != nil {
-		return err
-	}
-	a.core.Disconnect()
-	exe, _ := os.Executable()
-	if err := sys.StartDetached(exe, "--wait-pid", strconv.Itoa(os.Getpid())); err != nil {
-		return err
-	}
-	forceExitSoon()
-	runtime.Quit(a.ctx)
-	return nil
+	return a.plat.InstallUpdate(a.core, a.update, func(p float64) { a.emit("appUpdateProgress", p) })
 }
 
 // ---------------- learning ----------------
@@ -664,10 +743,10 @@ func (a *App) GetLogs() []core.LogLine { return a.core.Logs() }
 func (a *App) ClearLogs() { a.core.ClearLogs() }
 
 // CopyText copies text to clipboard.
-func (a *App) CopyText(t string) error { return runtime.ClipboardSetText(a.ctx, t) }
+func (a *App) CopyText(t string) error { return a.plat.ClipboardSet(t) }
 
 // OpenDataDir opens the data folder.
-func (a *App) OpenDataDir() error { return sys.OpenPath(a.dataDir) }
+func (a *App) OpenDataDir() error { return a.plat.OpenPath(a.dataDir) }
 
 // extensionVersion reads the version of the extension folder next to the app.
 func (a *App) extensionVersion() string {
@@ -688,57 +767,29 @@ func (a *App) OpenExtensionDir() error {
 	if _, err := os.Stat(d); err != nil {
 		return errors.New("پوشه extension کنار برنامه پیدا نشد؛ آن را از صفحه Releases دانلود کنید")
 	}
-	return sys.OpenPath(d)
+	return a.plat.OpenPath(d)
 }
 
 // OpenURL opens a link in the browser.
-func (a *App) OpenURL(u string) { runtime.BrowserOpenURL(a.ctx, u) }
+func (a *App) OpenURL(u string) { a.plat.OpenURL(u) }
 
 // FixL2TP applies the L2TP-behind-NAT registry fix.
 func (a *App) FixL2TP() error { return sys.FixL2TPBehindNAT() }
 
 // WindowMinimise minimises the window.
-func (a *App) WindowMinimise() { runtime.WindowMinimise(a.ctx) }
+func (a *App) WindowMinimise() { a.plat.Minimise() }
 
 // WindowToggleMaximise toggles maximise.
-func (a *App) WindowToggleMaximise() { runtime.WindowToggleMaximise(a.ctx) }
+func (a *App) WindowToggleMaximise() { a.plat.ToggleMaximise() }
 
 // Quit exits the app (disconnecting first).
 func (a *App) Quit() {
 	a.core.Disconnect()
-	runtime.Quit(a.ctx)
+	a.plat.Quit()
 }
 
-func goos() string { return goruntime.GOOS }
-
-// Hooks returns the Wails lifecycle callbacks (kept off the JS bindings).
-func Hooks(a *App) (startup, shutdown func(context.Context)) { return a.startup, a.shutdown }
-
-// StartHeadless initialises the core and the extension API without a window
-// (used by tests and the UI harness).
-func StartHeadless(a *App, emit func(string, any)) {
-	a.emitFn = emit
-	a.core.Emit = emit
-	a.core.Init()
-	a.startAPI(emit)
-}
-
-// OnSecondInstance brings the existing window to the front when the user
-// starts Rahgozar again (double-click on the exe, autostart, etc.).
-func OnSecondInstance(a *App) func(options.SecondInstanceData) {
-	return func(options.SecondInstanceData) {
-		if a.ctx == nil {
-			return
-		}
-		runtime.WindowUnminimise(a.ctx)
-		runtime.WindowShow(a.ctx)
-		runtime.WindowSetAlwaysOnTop(a.ctx, true)
-		go func() {
-			time.Sleep(300 * time.Millisecond)
-			runtime.WindowSetAlwaysOnTop(a.ctx, false)
-		}()
-	}
-}
+// Focus brings the window to the front (second instance launched).
+func Focus(a *App) { a.plat.Focus() }
 
 // EnsureExtension writes the embedded browser extension to "<app dir>/extension"
 // when the folder is missing or holds a different version.
@@ -778,11 +829,36 @@ func EnsureExtension(efs fs.FS, root string) {
 	})
 }
 
-// forceExitSoon guarantees the process ends after a relaunch even if the
-// window shutdown hangs, so the new instance can take over.
-func forceExitSoon() {
-	go func() {
-		time.Sleep(5 * time.Second)
-		os.Exit(0)
-	}()
+// StartHeadless initialises the core and the extension API without a window
+// (used by tests and the UI harness).
+func StartHeadless(a *App, emit func(string, any)) {
+	if a.plat == nil {
+		a.plat = &HeadlessPlatform{EmitFn: emit}
+		a.core.TunAllowed = a.plat.TunAllowed
+	}
+	Start(a)
 }
+
+// HeadlessPlatform is a no-UI platform for tests.
+type HeadlessPlatform struct{ EmitFn func(string, any) }
+
+func (h *HeadlessPlatform) OS() string { return "headless" }
+func (h *HeadlessPlatform) Emit(n string, d any) {
+	if h.EmitFn != nil {
+		h.EmitFn(n, d)
+	}
+}
+func (h *HeadlessPlatform) ClipboardGet() (string, error)                    { return "", nil }
+func (h *HeadlessPlatform) ClipboardSet(string) error                        { return nil }
+func (h *HeadlessPlatform) PickFiles(string, string, bool) ([]string, error) { return nil, nil }
+func (h *HeadlessPlatform) OpenURL(string)                                   {}
+func (h *HeadlessPlatform) OpenPath(string) error                            { return nil }
+func (h *HeadlessPlatform) Minimise()                                        {}
+func (h *HeadlessPlatform) ToggleMaximise()                                  {}
+func (h *HeadlessPlatform) Focus()                                           {}
+func (h *HeadlessPlatform) Quit()                                            {}
+func (h *HeadlessPlatform) Relaunch(bool) error                              { return nil }
+func (h *HeadlessPlatform) InstallUpdate(*core.Core, *core.AppUpdate, func(float64)) error {
+	return nil
+}
+func (h *HeadlessPlatform) TunAllowed() bool { return true }

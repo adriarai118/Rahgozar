@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ink">#0D1826</color>
+    <color name="firouzeh">#35C9B5</color>
+    <style name="Theme.Rahgozar" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/ink</item>
+        <item name="android:statusBarColor">@color/ink</item>
+        <item name="android:navigationBarColor">@color/ink</item>
+        <item name="android:colorAccent">@color/firouzeh</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

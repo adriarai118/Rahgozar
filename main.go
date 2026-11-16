@@ -55,8 +55,8 @@ func main() {
 		}
 	}
 	desk.EnsureExtension(extensionFS, "extension")
-	app := desk.NewApp(os.Args[1:])
-	onStart, onStop := desk.Hooks(app)
+	plat := &wailsPlatform{}
+	app := desk.NewApp(desk.Options{Platform: plat})
 	start := options.Normal
 	for _, a := range os.Args[1:] {
 		if a == "--minimized" {
@@ -88,12 +88,12 @@ func main() {
 		WindowStartState: start,
 		BackgroundColour: &options.RGBA{R: 13, G: 24, B: 38, A: 255},
 		AssetServer:      &assetserver.Options{Assets: frontend.Assets},
-		OnStartup:        onStart,
-		OnShutdown:       onStop,
+		OnStartup:        func(ctx context.Context) { plat.ctx = ctx; desk.Start(app) },
+		OnShutdown:       func(ctx context.Context) { desk.Stop(app) },
 		Bind:             []interface{}{app},
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId:               "rahgozar-vpn-7f3c",
-			OnSecondInstanceLaunch: desk.OnSecondInstance(app),
+			OnSecondInstanceLaunch: func(options.SecondInstanceData) { desk.Focus(app) },
 		},
 		Windows: &windows.Options{
 			WebviewIsTransparent: false,

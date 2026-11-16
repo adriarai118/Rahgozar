@@ -15,7 +15,7 @@ import (
 )
 
 func TestExtensionAPI(t *testing.T) {
-	a := NewApp(nil)
+	a := NewApp(Options{})
 	s := a.store.Settings()
 	s.ExtPort = core.FreePort()
 	s.ExtToken = ""

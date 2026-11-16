@@ -44,7 +44,12 @@ func semverLess(a, b string) bool {
 	return false
 }
 
-var appAsset = regexp.MustCompile(`(?i)rahgozar.*` + runtime.GOOS + `.*` + runtime.GOARCH + `.*\.(zip|exe)$`)
+var appAsset = func() *regexp.Regexp {
+	if runtime.GOOS == "android" {
+		return regexp.MustCompile(`(?i)rahgozar.*android.*\.apk$`)
+	}
+	return regexp.MustCompile(`(?i)rahgozar.*` + runtime.GOOS + `.*` + runtime.GOARCH + `.*\.(zip|exe)$`)
+}()
 
 // CheckAppUpdate looks for a newer release in the configured repo.
 func (c *Core) CheckAppUpdate() (*AppUpdate, error) {
@@ -64,7 +69,11 @@ func (c *Core) CheckAppUpdate() (*AppUpdate, error) {
 		}
 	}
 	if u.URL == "" {
-		u.URL = fmt.Sprintf("https://github.com/%s/releases/download/%s/Rahgozar-%s-%s.zip", set.AppRepo, rel.TagName, runtime.GOOS, runtime.GOARCH)
+		if runtime.GOOS == "android" {
+			u.URL = fmt.Sprintf("https://github.com/%s/releases/download/%s/Rahgozar-android.apk", set.AppRepo, rel.TagName)
+		} else {
+			u.URL = fmt.Sprintf("https://github.com/%s/releases/download/%s/Rahgozar-%s-%s.zip", set.AppRepo, rel.TagName, runtime.GOOS, runtime.GOARCH)
+		}
 	}
 	return u, nil
 }

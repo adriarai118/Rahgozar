@@ -34,6 +34,7 @@ type Status struct {
 	HasBackup bool    `json:"hasBackup"`
 	Path      string  `json:"path"`
 	CheckedAt int64   `json:"checkedAt"`
+	Builtin   bool    `json:"builtin"`
 }
 
 // Manager installs and updates components under Dir.

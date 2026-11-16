@@ -193,6 +193,22 @@ API.on('appUpdateProgress', p => { const el = document.getElementById('appUpBar'
 
 window.addEventListener('resize', () => { if (S.page === 'home') Pages.homeTraffic(); });
 
+// Android back button: close a dialog, then go home, then let the app go to background
+window.__rgBack = () => {
+  const m = document.getElementById('modal');
+  if (!m.hidden) { Modal.close(); return true; }
+  if (S.page !== 'home') { navigate('home'); return true; }
+  return false;
+};
+API.on('imported', r => { showImportResult(r); refresh(); });
+API.on('resume', async () => { if (S.st) { S.st.status = await API.call('GetStatus'); renderRail(); renderTitle(); if (S.page === 'home') Pages.homeUpdate(); } });
+function showImportResult(r) {
+  const res = r && r.result ? r.result : r;
+  if (r && r.error) toast(r.error, 'error');
+  else if (res && res.added) toast(fa(res.added) + ' سرور اضافه شد', 'ok');
+}
+if (/android/.test(location.search)) document.documentElement.dataset.platform = 'android';
+
 renderRail();
 refresh().then(() => { loadEngines(); }).catch(e => {
   document.getElementById('view').innerHTML = `<div class="empty"><b>ارتباط با هسته برنامه برقرار نشد</b><span class="ltr" style="user-select:text">${esc(errText(e))}</span><br><button class="btn primary" onclick="location.reload()">تلاش دوباره</button></div>`;

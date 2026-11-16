@@ -1,17 +1,44 @@
 // Bridge to the Go backend (Wails). When opened in a plain browser a mock
 // backend is used so the interface can be previewed.
 (function () {
-  const real = !!(window.go && window.go.desk && window.go.desk.App);
+  const android = !!window.RahgozarAndroid;
+  const wails = !!(window.go && window.go.desk && window.go.desk.App);
+  const real = android || wails;
   const listeners = {};
+  document.documentElement.dataset.platform = android ? 'android' : 'desktop';
 
   function on(name, fn) {
-    if (real) return window.runtime.EventsOn(name, fn);
+    if (wails) return window.runtime.EventsOn(name, fn);
     (listeners[name] = listeners[name] || []).push(fn);
   }
-  function emit(name, data) { (listeners[name] || []).forEach(f => f(data)); }
+  function emit(name, data) { (listeners[name] || []).forEach(f => { try { f(data); } catch (e) { console.error(e); } }); }
+
+  // Android: Kotlin bridge, answers through window.__rgResolve / __rgEvent
+  let seq = 0;
+  const pending = {};
+  window.__rgResolve = (id, json) => {
+    const p = pending[id];
+    if (!p) return;
+    delete pending[id];
+    let r;
+    try { r = JSON.parse(json); } catch (e) { p.reject(new Error('bad response')); return; }
+    if (r.error) p.reject(r.error); else p.resolve(r.result);
+  };
+  window.__rgEvent = (name, json) => {
+    let d = null;
+    try { d = JSON.parse(json); } catch (e) { d = json; }
+    emit(name, d);
+  };
 
   async function call(method, ...args) {
-    if (real) return window.go.desk.App[method](...args);
+    if (android) {
+      return new Promise((resolve, reject) => {
+        const id = ++seq;
+        pending[id] = { resolve, reject };
+        window.RahgozarAndroid.call(method, JSON.stringify(args), id);
+      });
+    }
+    if (wails) return window.go.desk.App[method](...args);
     return mock[method] ? mock[method](...args) : null;
   }
 
@@ -24,7 +51,7 @@
     success, latency, samples, lastOk: now() - 300
   });
   const state = {
-    version: '1.0.0', admin: false, enginesOk: true, os: 'windows', dataDir: 'C:\\Rahgozar\\data',
+    version: '1.0.0', admin: false, enginesOk: true, os: /android/.test(location.search) ? 'android' : 'windows', dataDir: 'C:\\Rahgozar\\data',
     settings: {
       language: 'fa', theme: 'dark', mode: 'proxy', routingMode: 'smart', selectedId: 'auto', autoSelect: true,
       autoFailover: true, learnDomains: true, mixedPort: 10808, allowLan: false, setSystemProxy: true, bypassLan: true,
@@ -117,8 +144,10 @@
       { t: Date.now() - 3000, src: 'learn', text: 'youtube.com → proxy (connection reset)', lvl: 'info' },
       { t: Date.now() - 1000, src: 'sing-box', text: 'WARN [0012] outbound/vless[proxy]: handshake slow', lvl: 'warn' }],
     ClearLogs: async () => {}, CopyText: async () => {}, OpenDataDir: async () => {}, OpenURL: async () => {}, FixL2TP: async () => {},
-    RelaunchAdmin: async () => {}, WindowMinimise: async () => {}, WindowToggleMaximise: async () => {}, Quit: async () => {}
+    RelaunchAdmin: async () => {},
+    AndroidApps: async () => [{ pkg: 'org.telegram.messenger', name: 'Telegram' }, { pkg: 'com.instagram.android', name: 'Instagram' }, { pkg: 'ir.mobillet.app', name: 'موبایلت' }, { pkg: 'com.android.chrome', name: 'Chrome' }],
+    ApprovePair: async () => {}, RevokeExtensions: async () => {}, OpenExtensionDir: async () => {}, WindowMinimise: async () => {}, WindowToggleMaximise: async () => {}, Quit: async () => {}
   };
 
-  window.API = { call, on, real };
+  window.API = { call, on, real, android };
 })();

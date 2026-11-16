@@ -144,3 +144,6 @@ func (p *Proc) Stop() {
 		<-p.done
 	}
 }
+
+// Label returns the process display name.
+func (p *Proc) Label() string { return p.Name }

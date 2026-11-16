@@ -57,18 +57,24 @@ type Status struct {
 
 // Core is the controller.
 type Core struct {
-	Store   *store.Store
-	Eng     *engine.Manager
-	Learner *smart.Learner
-	Domains *smart.Domains
-	DataDir string
-	Emit    func(name string, data any)
-	ExeName string
+	Store  *store.Store
+	Eng    *engine.Manager
+	Runner Runner
+	// TunAllowed reports whether TUN mode can be started (admin on Windows).
+	TunAllowed func() bool
+	// Platform-specific additions to the generated config (Android: own package, per-app lists).
+	OS         string
+	OwnPackage string
+	Learner    *smart.Learner
+	Domains    *smart.Domains
+	DataDir    string
+	Emit       func(name string, data any)
+	ExeName    string
 
 	opMu    sync.Mutex
 	mu      sync.Mutex
 	status  Status
-	procs   []*engine.Proc
+	procs   []Process
 	rasName string
 	clash   string
 	secret  string
@@ -87,9 +93,12 @@ var (
 // New creates the controller.
 func New(st *store.Store, eng *engine.Manager, dataDir string) *Core {
 	c := &Core{Store: st, Eng: eng, DataDir: dataDir, Learner: smart.NewLearner(), logs: newLogRing(3000), exclude: map[string]time.Time{}}
+	c.Runner = ExecRunner{Eng: eng}
+	c.TunAllowed = sys.IsAdmin
+	c.OS = goos
 	st.ReadJSON("learning.json", c.Learner)
 	c.Domains = smart.NewDomains(filepath.Join(dataDir, "learned"))
-	c.status = Status{State: "idle", Admin: sys.IsAdmin()}
+	c.status = Status{State: "idle", Admin: c.TunAllowed()}
 	c.Emit = func(string, any) {}
 	return c
 }
@@ -212,7 +221,7 @@ func (c *Core) connectLocked(forceID string) error {
 	set := c.Store.Settings()
 	netID, netLabel := sys.NetworkID()
 	c.setStatus(func(s *Status) {
-		*s = Status{State: "connecting", Mode: set.Mode, Admin: sys.IsAdmin(), NetID: netID, NetLabel: netLabel, Message: "در حال آماده‌سازی…", Failovers: s.Failovers, Port: set.MixedPort}
+		*s = Status{State: "connecting", Mode: set.Mode, Admin: c.TunAllowed(), NetID: netID, NetLabel: netLabel, Message: "در حال آماده‌سازی…", Failovers: s.Failovers, Port: set.MixedPort}
 	})
 	fail := func(err error) error {
 		c.stopAll()
@@ -243,7 +252,7 @@ func (c *Core) connectLocked(forceID string) error {
 	if p.IsRAS() {
 		return c.connectRAS(p, netID, fail)
 	}
-	if set.Mode == "tun" && !sys.IsAdmin() {
+	if set.Mode == "tun" && !c.TunAllowed() {
 		return fail(errors.New("NEED_ADMIN"))
 	}
 	if err := c.startEngines(p, set); err != nil {
@@ -325,8 +334,7 @@ func (c *Core) connectRAS(p *model.Profile, netID string, fail func(error) error
 
 // startEngines builds configs and launches helper engines + sing-box.
 func (c *Core) startEngines(p *model.Profile, set model.Settings) error {
-	sbExe, err := c.Eng.ExePath("sing-box")
-	if err != nil {
+	if err := c.Runner.Available(model.EngineSingBox); err != nil {
 		return err
 	}
 	c.clash = "127.0.0.1:" + strconv.Itoa(FreePort())
@@ -344,7 +352,9 @@ func (c *Core) startEngines(p *model.Profile, set model.Settings) error {
 		ClashSecret:  c.secret,
 		PortAlloc:    FreePort,
 		ExeName:      c.ExeName,
-		EngineExes:   c.Eng.ExeNames(),
+		EngineExes:   c.Runner.ExeNames(),
+		OS:           c.OS,
+		OwnPackage:   c.OwnPackage,
 		HasRuleFiles: c.Eng.HasRuleFiles(builder.RuleSetFiles),
 	}
 	if !portFree(set.MixedPort, set.AllowLAN) {
@@ -357,23 +367,15 @@ func (c *Core) startEngines(p *model.Profile, set model.Settings) error {
 		return err
 	}
 	for _, h := range res.Helpers {
-		exe, err := c.Eng.ExePath(h.Engine)
-		if err != nil {
+		if err := c.Runner.Available(h.Engine); err != nil {
 			return err
 		}
 		cfgPath := filepath.Join(rt, h.FileName)
 		if err := os.WriteFile(cfgPath, h.Config, 0o600); err != nil {
 			return err
 		}
-		var args []string
-		if h.Engine == model.EngineXray {
-			args = []string{"run", "-c", cfgPath}
-		} else {
-			args = []string{"-d", filepath.Join(rt, "mihomo"), "-f", cfgPath}
-			os.MkdirAll(filepath.Join(rt, "mihomo"), 0o755)
-		}
 		c.setStatus(func(s *Status) { s.Message = "اجرای " + builder.EngineLabel(h.Engine) + "…" })
-		proc, err := engine.Start(h.Engine, exe, filepath.Dir(exe), args, c.Log)
+		proc, err := c.Runner.Start(Job{Name: h.Engine, Engine: h.Engine, ConfigPath: cfgPath, Config: h.Config, RuntimeDir: rt}, c.Log)
 		if err != nil {
 			return err
 		}
@@ -388,7 +390,7 @@ func (c *Core) startEngines(p *model.Profile, set model.Settings) error {
 		return err
 	}
 	c.setStatus(func(s *Status) { s.Message = "اجرای sing-box…" })
-	proc, err := engine.Start("sing-box", sbExe, filepath.Dir(sbExe), []string{"run", "-c", cfgPath, "-D", rt, "--disable-color"}, c.Log)
+	proc, err := c.Runner.Start(Job{Name: "sing-box", Engine: model.EngineSingBox, ConfigPath: cfgPath, Config: b, RuntimeDir: rt, Main: true}, c.Log)
 	if err != nil {
 		return err
 	}
@@ -413,7 +415,7 @@ func portFree(port int, lan bool) bool {
 	return true
 }
 
-func waitPort(proc *engine.Proc, port int, d time.Duration) error {
+func waitPort(proc Process, port int, d time.Duration) error {
 	deadline := time.Now().Add(d)
 	for time.Now().Before(deadline) {
 		if !proc.Alive() {
@@ -426,7 +428,7 @@ func waitPort(proc *engine.Proc, port int, d time.Duration) error {
 		}
 		time.Sleep(150 * time.Millisecond)
 	}
-	return fmt.Errorf("%s did not start in time", proc.Name)
+	return fmt.Errorf("%s did not start in time", proc.Label())
 }
 
 func (c *Core) clashGet(ctx context.Context, path string, out any) error {
@@ -452,7 +454,7 @@ func (c *Core) clashGet(ctx context.Context, path string, out any) error {
 
 var localClient = &http.Client{Transport: &http.Transport{Proxy: nil}, Timeout: 30 * time.Second}
 
-func (c *Core) waitClash(proc *engine.Proc, d time.Duration) error {
+func (c *Core) waitClash(proc Process, d time.Duration) error {
 	deadline := time.Now().Add(d)
 	for time.Now().Before(deadline) {
 		if !proc.Alive() {
@@ -469,7 +471,7 @@ func (c *Core) waitClash(proc *engine.Proc, d time.Duration) error {
 	return errors.New("sing-box did not become ready")
 }
 
-func (c *Core) addProc(p *engine.Proc) {
+func (c *Core) addProc(p Process) {
 	c.mu.Lock()
 	c.procs = append(c.procs, p)
 	c.mu.Unlock()
@@ -558,7 +560,7 @@ func (c *Core) savePIDs() {
 	var pf pidFile
 	for _, p := range c.procs {
 		pf.PIDs = append(pf.PIDs, p.PID())
-		pf.Exes = append(pf.Exes, p.Name)
+		pf.Exes = append(pf.Exes, p.Label())
 	}
 	c.mu.Unlock()
 	b, _ := json.Marshal(pf)
@@ -577,7 +579,7 @@ func (c *Core) killStale() {
 	}
 	for _, pid := range pf.PIDs {
 		path := strings.ToLower(sys.ProcessExePath(pid))
-		if path != "" && strings.HasPrefix(path, strings.ToLower(c.Eng.Dir)) {
+		if c.Runner.OwnsPath(path) {
 			sys.KillPID(pid)
 			c.Log("app", fmt.Sprintf("killed stale engine pid %d", pid))
 		}
@@ -589,11 +591,11 @@ func (c *Core) killStale() {
 
 func (c *Core) watchProcs(ctx context.Context) {
 	c.mu.Lock()
-	procs := append([]*engine.Proc(nil), c.procs...)
+	procs := append([]Process(nil), c.procs...)
 	c.mu.Unlock()
-	cases := make(chan *engine.Proc, len(procs))
+	cases := make(chan Process, len(procs))
 	for _, p := range procs {
-		go func(p *engine.Proc) {
+		go func(p Process) {
 			select {
 			case <-p.Done():
 				cases <- p
