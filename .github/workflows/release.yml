@@ -75,8 +75,8 @@ jobs:
       - name: Build Go core (AAR)
         working-directory: mobile
         run: |
-          go get golang.org/x/mobile/bind
           go mod tidy
+          go get golang.org/x/mobile/bind@latest
           gomobile init
           SB=$(go list -m -f '{{.Version}}' github.com/sagernet/sing-box | sed 's/^v//')
           gomobile bind -v -target android/arm64,android/arm -androidapi 24 -trimpath \
