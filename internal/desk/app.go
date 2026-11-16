@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -735,4 +736,42 @@ func OnSecondInstance(a *App) func(options.SecondInstanceData) {
 			runtime.WindowSetAlwaysOnTop(a.ctx, false)
 		}()
 	}
+}
+
+// EnsureExtension writes the embedded browser extension to "<app dir>/extension"
+// when the folder is missing or holds a different version.
+func EnsureExtension(efs fs.FS, root string) {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	dst := filepath.Join(filepath.Dir(exe), "extension")
+	readVer := func(b []byte) string {
+		var m struct {
+			Version string `json:"version"`
+		}
+		json.Unmarshal(b, &m)
+		return m.Version
+	}
+	emb, err := fs.ReadFile(efs, root+"/manifest.json")
+	if err != nil {
+		return
+	}
+	if disk, err := os.ReadFile(filepath.Join(dst, "manifest.json")); err == nil && readVer(disk) == readVer(emb) {
+		return
+	}
+	fs.WalkDir(efs, root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel := strings.TrimPrefix(p, root+"/")
+		b, err := fs.ReadFile(efs, p)
+		if err != nil {
+			return nil
+		}
+		out := filepath.Join(dst, filepath.FromSlash(rel))
+		os.MkdirAll(filepath.Dir(out), 0o755)
+		os.WriteFile(out, b, 0o644)
+		return nil
+	})
 }

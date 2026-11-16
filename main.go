@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"os"
 	"strconv"
 	"time"
@@ -16,6 +17,12 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
+// The browser extension ships inside the exe and is written next to it on
+// start, so the folder exists even after exe-only updates.
+//
+//go:embed all:extension
+var extensionFS embed.FS
+
 func main() {
 	// After an in-app update or "run as administrator" the old instance is
 	// still shutting down; wait for it, otherwise the single-instance lock
@@ -27,6 +34,7 @@ func main() {
 			}
 		}
 	}
+	desk.EnsureExtension(extensionFS, "extension")
 	app := desk.NewApp(os.Args[1:])
 	onStart, onStop := desk.Hooks(app)
 	start := options.Normal

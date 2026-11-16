@@ -27,6 +27,8 @@ jobs:
         run: |
           VER="$(cat VERSION | tr -d '[:space:]')"
           echo "VER=$VER" >> "$GITHUB_ENV"
+          # extension is embedded in the exe: stamp its version first
+          sed -i "s/\"version\": \"[0-9.]*\"/\"version\": \"$VER\"/" extension/manifest.json
           GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -tags desktop,production \
             -ldflags "-H windowsgui -s -w -X rahgozar/internal/core.Version=$VER" -o pkg/Rahgozar.exe .
       - name: Bundle Iran rule-sets
@@ -38,7 +40,6 @@ jobs:
           date +%Y%m%d%H%M > pkg/rules/version.txt
       - name: Browser extension
         run: |
-          sed -i "s/\"version\": \"[0-9.]*\"/\"version\": \"$VER\"/" extension/manifest.json
           cp -r extension pkg/extension
           (cd extension && zip -r ../Rahgozar-extension.zip .)
       - name: Zip
