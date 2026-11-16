@@ -17,7 +17,8 @@
 
   // ---------------- mock ----------------
   const now = () => Math.floor(Date.now() / 1000);
-  const mk = (id, name, type, net, sec, server, port, eng, success, latency, samples, group) => ({
+  const CC = { a1: 'de', a2: 'nl', a3: 'fi', a4: 'tr', a5: 'us', a6: 'ir', a7: '', a8: 'ir', a9: 'gb' };
+  const mk = (id, name, type, net, sec, server, port, eng, success, latency, samples, group) => ({ country: CC[id],
     id, name, type, network: net, security: sec, server, port, engineId: eng || 'sing-box', group: group || 'manual',
     family: [type === 'shadowsocks' ? 'ss' : type, net && net !== 'tcp' ? net : '', sec].filter(Boolean).join('+'),
     success, latency, samples, lastOk: now() - 300

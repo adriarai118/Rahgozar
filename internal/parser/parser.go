@@ -87,7 +87,7 @@ func ParseText(text string) ([]*model.Profile, []error) {
 	}
 	var out []*model.Profile
 	var errs []error
-	for _, line := range strings.FieldsFunc(text, func(r rune) bool { return r == '\n' || r == '\r' || r == ' ' || r == '\t' }) {
+	for _, line := range splitLinks(text) {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
 			continue
@@ -693,4 +693,27 @@ func parseRASLink(link, scheme string) (*model.Profile, error) {
 	}
 	p.PSK = u.Query().Get("psk")
 	return p, nil
+}
+
+// splitLinks splits text into links. Links are separated by new lines or by
+// whitespace before another "scheme://"; spaces inside a link's #name are kept.
+func splitLinks(text string) []string {
+	var out []string
+	for _, ln := range strings.FieldsFunc(text, func(r rune) bool { return r == '\n' || r == '\r' }) {
+		var cur string
+		for _, tok := range strings.Fields(ln) {
+			if strings.Contains(tok, "://") || cur == "" {
+				if cur != "" {
+					out = append(out, cur)
+				}
+				cur = tok
+			} else {
+				cur += " " + tok
+			}
+		}
+		if cur != "" {
+			out = append(out, cur)
+		}
+	}
+	return out
 }

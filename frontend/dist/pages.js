@@ -54,8 +54,8 @@ Pages.home = function () {
   let pick;
   if (info.p) {
     const p = info.p;
-    pick = `<span class="proto">${esc(PROTO_LABEL[p.type] || p.type)}</span>
-      <span class="who"><b>${esc(p.name)}</b><small>${info.auto ? 'انتخاب هوشمند · ' : ''}${esc(protoSub(p) || p.engineId)}</small></span>`;
+    pick = `<span class="proto">${p.country ? flag(p.country, 'lg') : esc(PROTO_LABEL[p.type] || p.type)}</span>
+      <span class="who"><b>${esc(p.name)}</b><small>${info.auto ? 'انتخاب هوشمند · ' : ''}${esc(PROTO_LABEL[p.type] || p.type)} ${esc(protoSub(p))}</small></span>`;
   } else {
     pick = `<span class="proto">${icon('spark')}</span><span class="who"><b>انتخاب هوشمند</b><small>بهترین سرور برای همین شبکه و همین ساعت</small></span>`;
   }
@@ -168,7 +168,7 @@ Pages.homeTraffic = function () {
 function openPicker() {
   const set = S.st.settings;
   const ps = S.st.profiles || [];
-  const item = p => `<button data-id="${p.id}" aria-pressed="${set.selectedId === p.id}"><span class="ptype">${esc(PROTO_LABEL[p.type] || p.type)}</span><span class="nm">${esc(p.name)}</span><span class="lat ${latClass(p.latency)}">${p.latency ? fa(Math.round(p.latency)) : ''}</span></button>`;
+  const item = p => `<button data-id="${p.id}" aria-pressed="${set.selectedId === p.id}">${flag(p.country)}<span class="ptype">${esc(PROTO_LABEL[p.type] || p.type)}</span><span class="nm">${esc(p.name)}</span><span class="lat ${latClass(p.latency)}">${p.latency ? fa(Math.round(p.latency)) : ''}</span></button>`;
   Modal.open(`<div class="dialog sm" role="dialog" aria-modal="true"><header><h3>انتخاب سرور</h3></header><div class="body">
     <button class="auto-card ${set.selectedId === 'auto' ? 'on' : ''}" data-id="auto">${icon('spark')}<span><b>انتخاب هوشمند</b><small>رهگذر از روی تجربه‌اش روی این شبکه، بهترین سرور را تست و انتخاب می‌کند و اگر قطع شد خودش عوض می‌کند.</small></span></button>
     <div class="search" style="margin:10px 0">${icon('search')}<input class="input" id="pq" placeholder="جستجو"></div>
@@ -215,7 +215,7 @@ function rowHTML(p) {
   return `<div class="row ${active ? 'active' : ''} ${chosen ? 'chosen' : ''}" data-row="${p.id}">
     <input type="checkbox" class="check" data-sel="${p.id}" ${S.selected.has(p.id) ? 'checked' : ''} aria-label="انتخاب">
     <div class="ptype">${esc(PROTO_LABEL[p.type] || p.type)}<em>${esc(protoSub(p))}</em></div>
-    <div class="name"><b>${esc(p.name)}</b><small>${esc(p.server)}${p.port ? ':' + p.port : ''}${p.engineId !== 'sing-box' ? '  ·  ' + esc(p.engineId) : ''}</small></div>
+    <div class="name"><div class="name-line">${flag(p.country)}<b>${esc(p.name)}</b></div><small>${esc(p.server)}${p.port ? ':' + p.port : ''}${p.engineId !== 'sing-box' ? '  ·  ' + esc(p.engineId) : ''}</small></div>
     <div class="learn-cell" title="نرخ موفقیت یادگرفته‌شده روی این شبکه">${p.samples ? `<div class="meter ${mcls}"><i style="width:${pct}%"></i></div><span>${fa(pct)}٪ موفق · ${fa(p.samples)} نمونه</span>` : '<span>بدون سابقه</span>'}</div>
     <div data-lat="${p.id}">${lat}</div>
     <div class="acts">
@@ -560,7 +560,7 @@ Pages.learn = function () {
     const pct = Math.round(f.success * 100);
     return `<div class="hrow"><span class="fam">${esc(f.family)}</span><div class="meter ${f.state === 'good' ? '' : f.state === 'weak' ? 'warn' : 'err'}"><i style="width:${pct}%"></i></div><span class="num">${fa(pct)}٪</span>${stateBadge[f.state] || ''}</div>`;
   }).join('');
-  const rank = (L.ranking || []).slice(0, 10).map((r, i) => `<div class="fact"><span>${fa(i + 1)}. ${esc(r.name)} <span class="faint ltr">${esc(r.family)}</span></span><b class="num">${r.samples ? fa(Math.round(r.success * 100)) + '٪ · ' + fa(Math.round(r.latency)) + 'ms' : 'بدون سابقه'}</b></div>`).join('');
+  const rank = (L.ranking || []).slice(0, 10).map((r, i) => `<div class="fact"><span>${fa(i + 1)}. ${flag(r.country)} ${esc(r.name)} <span class="faint ltr">${esc(r.family)}</span></span><b class="num">${r.samples ? fa(Math.round(r.success * 100)) + '٪ · ' + fa(Math.round(r.latency)) + 'ms' : 'بدون سابقه'}</b></div>`).join('');
   const vb = { direct: '<span class="badge ok">مستقیم</span>', proxy: '<span class="badge info">تونل</span>', unknown: '<span class="badge">نامعلوم</span>' };
   const dq = (S.dq || '').toLowerCase();
   const doms = (L.domains || []).filter(d => !dq || d.domain.includes(dq)).slice(0, 200).map(d => `<tr>

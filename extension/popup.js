@@ -53,16 +53,24 @@ function renderOffline(e) {
   $('#retry').onclick = load;
 }
 
-function serverOptions() {
+const flag = cc => /^[a-z]{2}$/.test(cc || '') ? `<img class="flag" src="flags/${cc}.png" alt="${cc.toUpperCase()}" title="${cc.toUpperCase()}">` : '<span class="flag none"></span>';
+const SPARK = '<svg class="spark" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/></svg>';
+
+function serverPicker() {
   const sv = P.servers;
-  if (!sv) return '<option>…</option>';
-  const sel = sv.selectedId || 'auto';
-  const opts = [`<option value="auto" ${sel === 'auto' ? 'selected' : ''}>انتخاب هوشمند (بهترین سرور)</option>`];
-  for (const s of sv.servers.slice(0, 80)) {
-    const lat = s.latency ? ' — ' + fa(Math.round(s.latency)) + 'ms' : '';
-    opts.push(`<option value="${esc(s.id)}" ${sel === s.id ? 'selected' : ''}>${esc(s.name)}${lat}</option>`);
+  const sel = (sv && sv.selectedId) || 'auto';
+  const cur = sv && sv.servers.find(s => s.id === sel);
+  const label = cur ? `${flag(cur.country)}<span class="nm">${esc(cur.name)}</span>` : `${SPARK}<span class="nm">انتخاب هوشمند</span>`;
+  let list = '';
+  if (P.pickerOpen && sv) {
+    const items = [`<button data-sid="auto" aria-pressed="${sel === 'auto'}">${SPARK}<span class="nm">انتخاب هوشمند (بهترین سرور)</span></button>`];
+    for (const s of sv.servers.slice(0, 120)) {
+      const lat = s.latency ? `<span class="lat">${fa(Math.round(s.latency))}</span>` : '';
+      items.push(`<button data-sid="${esc(s.id)}" aria-pressed="${sel === s.id}">${flag(s.country)}<span class="nm">${esc(s.name)}</span>${lat}</button>`);
+    }
+    list = `<div class="plist" id="plist">${items.join('')}</div>`;
   }
-  return opts.join('');
+  return `<button class="pbtn" id="pbtn" aria-expanded="${!!P.pickerOpen}">${label}<svg class="chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>${list}`;
 }
 
 function siteHTML() {
@@ -86,17 +94,17 @@ function siteHTML() {
 function render() {
   const st = P.st;
   const err = st.state === 'error' && st.error ? `<div class="err">${esc(st.error)}</div>` : '';
-  const srv = st.state === 'connected' ? `${esc(st.profileName || '')}${st.latency > 0 ? ' · ' + fa(st.latency) + 'ms' : ''}` : (st.message ? esc(st.message) : (st.enginesOk ? 'برای اتصال روی دروازه کلیک کنید' : 'موتورها نصب نیستند؛ برنامه را باز کنید'));
+  const srv = st.state === 'connected' ? `${st.country ? flag(st.country) + ' ' : ''}${esc(st.profileName || '')}${st.latency > 0 ? ' · ' + fa(st.latency) + 'ms' : ''}` : (st.message ? esc(st.message) : (st.enginesOk ? 'برای اتصال روی دروازه کلیک کنید' : 'موتورها نصب نیستند؛ برنامه را باز کنید'));
   root.innerHTML = `
     <div class="conn">
       <button class="gate" id="gate" data-state="${esc(st.state)}" title="اتصال / قطع (Alt+Shift+R)">${GATE}</button>
       <div class="conn-txt"><b>${stateText(st)}</b><div class="srv">${srv}</div>${err}
-        ${st.state === 'connected' ? `<div class="speeds"><span>↓ <b>${speed(st.downSpeed)}</b></span><span>↑ <b>${speed(st.upSpeed)}</b></span></div>` : ''}
+        ${st.state === 'connected' ? `<div class="speeds"><span>↓ <b id="sd">${speed(st.downSpeed)}</b></span><span>↑ <b id="su">${speed(st.upSpeed)}</b></span></div>` : ''}
       </div>
     </div>
     ${siteHTML()}
     <div class="block">
-      <div class="row"><span>سرور</span><select class="sel" id="server">${serverOptions()}</select></div>
+      <div class="picker-wrap">${serverPicker()}</div>
       <div class="row"><span>حالت اتصال</span><div class="mini-seg" id="mode">
         <button data-m="proxy" aria-pressed="${st.mode === 'proxy'}">پروکسی</button><button data-m="tun" aria-pressed="${st.mode === 'tun'}">TUN</button></div></div>
       <div class="row"><span>مسیریابی</span><select class="sel" id="routing">
@@ -116,9 +124,12 @@ function wire() {
     P.busy = false;
     chrome.runtime.sendMessage({ type: 'refresh' });
   };
-  $('#server').onchange = async e => {
-    try { P.st = await RG.select(e.target.value); P.servers.selectedId = e.target.value; toast('سرور انتخاب شد'); render(); } catch (err) { toast(err.message, true); }
-  };
+  $('#pbtn').onclick = () => { P.pickerOpen = !P.pickerOpen; render(); const l = $('#plist'); if (l) { const a = l.querySelector('[aria-pressed="true"]'); if (a) a.scrollIntoView({ block: 'nearest' }); } };
+  document.querySelectorAll('#plist [data-sid]').forEach(b => b.onclick = async () => {
+    P.pickerOpen = false;
+    try { P.st = await RG.select(b.dataset.sid); P.servers.selectedId = b.dataset.sid; toast('سرور انتخاب شد'); } catch (err) { toast(err.message, true); }
+    render();
+  });
   document.querySelectorAll('#mode button').forEach(b => b.onclick = async () => {
     try { P.st = await RG.mode(b.dataset.m); render(); } catch (e) { toast(e.message, true); }
   });
@@ -176,12 +187,18 @@ async function load() {
   loadServers();
   clearInterval(poll);
   poll = setInterval(async () => {
-    if (P.busy || P.probing || document.activeElement && document.activeElement.tagName === 'SELECT') return;
+    if (P.busy || P.probing || P.pickerOpen || document.activeElement && document.activeElement.tagName === 'SELECT') return;
     try {
-      const prev = P.st.state;
+      const prev = P.st;
       P.st = await RG.status();
-      if (prev !== P.st.state) await loadSite();
-      render();
+      if (prev.state !== P.st.state) await loadSite();
+      const key = s => [s.state, s.profileId, s.latency, s.mode, s.routingMode, s.error, s.message, s.selectedId, s.country].join('|');
+      if (key(prev) !== key(P.st)) render();
+      else {
+        const sd = $('#sd'), su = $('#su');
+        if (sd) sd.textContent = speed(P.st.downSpeed);
+        if (su) su.textContent = speed(P.st.upSpeed);
+      }
     } catch (e) { clearInterval(poll); renderOffline(e); }
   }, 1200);
 }

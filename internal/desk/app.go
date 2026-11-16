@@ -15,6 +15,7 @@ import (
 	"rahgozar/internal/builder"
 	"rahgozar/internal/core"
 	"rahgozar/internal/engine"
+	"rahgozar/internal/geo"
 	"rahgozar/internal/model"
 	"rahgozar/internal/parser"
 	"rahgozar/internal/smart"
@@ -34,6 +35,7 @@ type App struct {
 	args    []string
 	api     *extAPI
 	emitFn  func(string, any)
+	geo     *geo.Resolver
 }
 
 // NewApp wires everything together.
@@ -52,6 +54,12 @@ func NewApp(args []string) *App {
 	c := core.New(st, eng, dataDir)
 	c.ExeName = filepath.Base(exe)
 	a := &App{store: st, eng: eng, core: c, dataDir: dataDir, appDir: appDir, args: args}
+	a.geo = geo.NewResolver(filepath.Join(dataDir, "geo-cache.json"))
+	a.geo.OnNew = func() {
+		if a.emitFn != nil {
+			a.emitFn("profiles", nil)
+		}
+	}
 	eng.Mirror = func() string { return st.Settings().GitHubMirror }
 	eng.Client = func() *http.Client {
 		s := st.Settings()
@@ -130,14 +138,16 @@ type AppState struct {
 // ProfileView adds computed fields for the list.
 type ProfileView struct {
 	*model.Profile
-	EngineID string  `json:"engineId"`
-	Family   string  `json:"family"`
-	Link     string  `json:"link"`
-	Success  float64 `json:"success"`
-	Latency  float64 `json:"latency"`
-	Samples  int     `json:"samples"`
-	LastOK   int64   `json:"lastOk"`
-	LastFail int64   `json:"lastFail"`
+	EngineID  string  `json:"engineId"`
+	Family    string  `json:"family"`
+	Link      string  `json:"link"`
+	Success   float64 `json:"success"`
+	Latency   float64 `json:"latency"`
+	Samples   int     `json:"samples"`
+	LastOK    int64   `json:"lastOk"`
+	LastFail  int64   `json:"lastFail"`
+	Country   string  `json:"country"`
+	CountryBy string  `json:"countryBy"`
 }
 
 func (a *App) views() []*ProfileView {
@@ -145,6 +155,7 @@ func (a *App) views() []*ProfileView {
 	var out []*ProfileView
 	for _, p := range a.store.Profiles() {
 		v := &ProfileView{Profile: p, EngineID: builder.EngineFor(p), Family: p.Family()}
+		v.Country, v.CountryBy = a.geo.Country(p.Name, p.Server)
 		if s := a.core.Learner.ServerStat(p.ID, netID); s != nil {
 			v.Success, v.Latency, v.Samples, v.LastOK, v.LastFail = s.Success, s.Latency, s.N, s.LastOK, s.LastFail
 		}
@@ -584,8 +595,9 @@ type LearningView struct {
 // RankView is a ranked server.
 type RankView struct {
 	smart.Ranked
-	Name   string `json:"name"`
-	Family string `json:"family"`
+	Name    string `json:"name"`
+	Family  string `json:"family"`
+	Country string `json:"country"`
 }
 
 // GetLearning returns learned knowledge for the current network.
@@ -610,7 +622,8 @@ func (a *App) GetLearning() LearningView {
 			break
 		}
 		p := names[r.ID]
-		v.Ranking = append(v.Ranking, RankView{Ranked: r, Name: p.Name, Family: p.Family()})
+		cc, _ := a.geo.Country(p.Name, p.Server)
+		v.Ranking = append(v.Ranking, RankView{Ranked: r, Name: p.Name, Family: p.Family(), Country: cc})
 	}
 	v.Domains = a.core.Domains.List()
 	if len(v.Domains) > 500 {

@@ -122,3 +122,13 @@ func TestClash(t *testing.T) {
 		t.Fatalf("%+v", ps[0])
 	}
 }
+
+func TestSpacesInName(t *testing.T) {
+	ps, errs := ParseText("vless://u@a.com:443?security=tls#آلمان ریلیتی ۱ trojan://p@b.com:443#Turkey 2\nss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpwdw@5.6.7.8:8388#My SS")
+	if len(ps) != 3 || len(errs) != 0 {
+		t.Fatalf("%d %v", len(ps), errs)
+	}
+	if ps[0].Name != "آلمان ریلیتی ۱" || ps[1].Name != "Turkey 2" || ps[2].Name != "My SS" {
+		t.Fatalf("%q %q %q", ps[0].Name, ps[1].Name, ps[2].Name)
+	}
+}

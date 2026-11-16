@@ -378,6 +378,13 @@ canvas.spark { width: 100%; height: 130px; display: block; }
 .list-pick .ptype { width: 52px; font-size: 10.5px; font-weight: 800; color: var(--mute); direction: ltr; }
 .list-pick .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* ---------- flags ---------- */
+.flag { width: 22px; height: 16.5px; border-radius: 3px; object-fit: cover; flex: none; box-shadow: 0 0 0 1px rgba(255,255,255,.1); vertical-align: -3px; display: inline-block; }
+.flag.none { background: var(--line-soft); box-shadow: inset 0 0 0 1px var(--line); }
+.flag.lg { width: 32px; height: 24px; border-radius: 4px; }
+.name-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.name-line b { min-width: 0; }
+
 /* ---------- toasts ---------- */
 .toasts { position: fixed; bottom: 18px; left: 18px; display: flex; flex-direction: column; gap: 8px; z-index: 60; max-width: 420px; }
 .toast { padding: 11px 14px; border-radius: 11px; background: var(--panel-2); border: 1px solid var(--line); box-shadow: var(--shadow); font-size: 13.5px; display: flex; gap: 10px; align-items: flex-start; animation: tin .2s ease-out; user-select: text; }

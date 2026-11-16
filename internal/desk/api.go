@@ -254,6 +254,7 @@ type extStatus struct {
 	ProxyPort   int    `json:"proxyPort"`
 	EnginesOK   bool   `json:"enginesOk"`
 	Servers     int    `json:"servers"`
+	Country     string `json:"country"`
 }
 
 func (x *extAPI) statusValue() extStatus {
@@ -265,8 +266,12 @@ func (x *extAPI) statusValue() extStatus {
 	if st.State == "connected" && a.core.Status().Mode == "system" {
 		st.Mode = "system"
 	}
-	return extStatus{Status: st, RoutingMode: set.RoutingMode, SelectedID: set.SelectedID, Version: core.Version,
+	es := extStatus{Status: st, RoutingMode: set.RoutingMode, SelectedID: set.SelectedID, Version: core.Version,
 		ProxyPort: set.MixedPort, EnginesOK: err == nil, Servers: len(a.store.Profiles())}
+	if p := a.store.Profile(st.ProfileID); p != nil {
+		es.Country, _ = a.geo.Country(p.Name, p.Server)
+	}
+	return es
 }
 
 func (x *extAPI) status(r *http.Request) (any, error) { return x.statusValue(), nil }
@@ -305,6 +310,7 @@ type extServer struct {
 	Success float64 `json:"success"`
 	Samples int     `json:"samples"`
 	Group   string  `json:"group"`
+	Country string  `json:"country"`
 }
 
 func (x *extAPI) servers(r *http.Request) (any, error) {
@@ -325,13 +331,15 @@ func (x *extAPI) servers(r *http.Request) (any, error) {
 	for _, rk := range a.core.Learner.Rank(cands, netID) {
 		p := byID[rk.ID]
 		s := extServer{ID: p.ID, Name: p.Name, Type: p.Type, Family: p.Family(), Group: p.Group}
+		s.Country, _ = a.geo.Country(p.Name, p.Server)
 		if rk.Samples > 0 {
 			s.Latency, s.Success, s.Samples = rk.Latency, rk.Success, rk.Samples
 		}
 		out = append(out, s)
 	}
 	for _, p := range ras {
-		out = append(out, extServer{ID: p.ID, Name: p.Name, Type: p.Type, Family: p.Family(), Group: p.Group})
+		cc, _ := a.geo.Country(p.Name, p.Server)
+		out = append(out, extServer{ID: p.ID, Name: p.Name, Type: p.Type, Family: p.Family(), Group: p.Group, Country: cc})
 	}
 	return map[string]any{"selectedId": a.store.Settings().SelectedID, "servers": out}, nil
 }

@@ -75,6 +75,11 @@ const ICONS = {
   tun: '<path d="M4 18c0-7 3.6-12 8-12s8 5 8 12"/><path d="M2 18h20"/>',
   proxy: '<circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M8.5 12h7"/>'
 };
+const FLAG_OK = /^[a-z]{2}$/;
+function flag(cc, cls) {
+  if (!cc || !FLAG_OK.test(cc)) return `<span class="flag none ${cls || ''}" title="کشور نامشخص"></span>`;
+  return `<img class="flag ${cls || ''}" src="flags/${cc}.png" alt="${cc.toUpperCase()}" title="${cc.toUpperCase()}" loading="lazy">`;
+}
 function icon(name) { return `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`; }
 
 function toast(text, kind) {
