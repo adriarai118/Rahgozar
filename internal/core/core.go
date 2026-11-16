@@ -76,7 +76,13 @@ type Core struct {
 	logs    *logRing
 	current *model.Profile
 	exclude map[string]time.Time
+	prober  *smart.Prober
 }
+
+var (
+	errBadHost   = errors.New("آدرس سایت نامعتبر است")
+	errBadAction = errors.New("عملیات نامعتبر است")
+)
 
 // New creates the controller.
 func New(st *store.Store, eng *engine.Manager, dataDir string) *Core {
@@ -101,6 +107,7 @@ func (c *Core) Init() {
 		c.Emit("domain", d)
 		c.Log("learn", fmt.Sprintf("%s → %s (%s)", d.Domain, d.Verdict, d.Reason))
 	}
+	c.WriteUserRules()
 	prober := &smart.Prober{
 		DirectDNS: firstOr(directDNSHost(set.DirectDNS), "8.8.8.8"),
 		ProxyURL: func() string {
@@ -110,6 +117,7 @@ func (c *Core) Init() {
 			return "http://127.0.0.1:" + strconv.Itoa(c.Store.Settings().MixedPort)
 		},
 	}
+	c.prober = prober
 	c.Domains.Start(prober.Probe, c.userRuleMatch, 3)
 	go c.saveLoop()
 	go c.subscriptionLoop()
@@ -339,6 +347,7 @@ func (c *Core) startEngines(p *model.Profile, set model.Settings) error {
 		return fmt.Errorf("پورت %d توسط برنامه دیگری اشغال است؛ در تنظیمات پورت را عوض کنید", set.MixedPort)
 	}
 	c.Domains.WriteRuleFiles()
+	c.WriteUserRules()
 	res, err := builder.Build(in)
 	if err != nil {
 		return err

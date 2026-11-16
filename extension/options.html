@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>تنظیمات اکستنشن رهگذر</title>
+<link rel="stylesheet" href="popup.css">
+<style>
+  body { width: auto; max-width: 620px; margin: 40px auto; padding: 0 20px; }
+  h1 { font-size: 24px; margin: 0 0 6px; }
+  .card { background: var(--panel); border: 1px solid var(--line-soft); border-radius: 14px; padding: 18px 20px; margin-top: 16px; }
+  .card h2 { font-size: 15px; margin: 0 0 10px; }
+  .f { display: grid; gap: 6px; margin-top: 10px; }
+  .f span { font-size: 12.5px; color: var(--mute); }
+  .in { height: 38px; border-radius: 9px; border: 1px solid var(--line); background: var(--rail); padding: 0 12px; direction: ltr; text-align: left; }
+  .acts { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  ul { margin: 6px 0 0; padding-inline-start: 18px; color: var(--mute); font-size: 13px; line-height: 1.9; }
+  kbd { font-family: Consolas, monospace; background: var(--rail); border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; direction: ltr; display: inline-block; }
+  #st { margin-top: 10px; font-size: 13px; }
+</style>
+</head>
+<body>
+  <h1>اکستنشن رهگذر</h1>
+  <p class="mute">این اکستنشن فقط با برنامه رهگذر روی همین کامپیوتر کار می‌کند و چیزی را به اینترنت نمی‌فرستد.</p>
+
+  <div class="card">
+    <h2>اتصال به برنامه</h2>
+    <div id="st">…</div>
+    <div class="acts"><button class="btn primary" id="pair">اتصال به رهگذر</button><button class="btn" id="unpair">قطع اتصال این مرورگر</button></div>
+    <label class="f"><span>پورت ارتباط (باید با «تنظیمات ← اکستنشن مرورگر» در برنامه یکی باشد)</span><input class="in" id="port" type="number" min="1" max="65535"></label>
+    <label class="f"><span>کلید دسترسی (فقط اگر جفت‌سازی خودکار کار نکرد)</span><input class="in" id="token" placeholder="paste token"></label>
+    <div class="acts"><button class="btn" id="save">ذخیره</button></div>
+  </div>
+
+  <div class="card">
+    <h2>کارهایی که می‌توانید بکنید</h2>
+    <ul>
+      <li>روی آیکون کلیک کنید تا اتصال، سرور، حالت TUN/پروکسی و مسیر سایت فعلی را عوض کنید.</li>
+      <li>کلیک راست روی صفحه یا لینک ← «رهگذر» ← تونل، مستقیم، مسدود یا خودکار.</li>
+      <li>نشان روی آیکون: <b style="color:#22a594">T</b> از تونل، <b style="color:#4c7df0">D</b> مستقیم، <b style="color:#e5566b">✕</b> مسدود.</li>
+      <li><kbd>Alt+Shift+R</kbd> اتصال/قطع — <kbd>Alt+Shift+S</kbd> جابه‌جایی سایت فعلی بین تونل و مستقیم (قابل تغییر در <span class="ltr">chrome://extensions/shortcuts</span>).</li>
+      <li>«فقط این مرورگر از تونل»: وقتی پروکسی ویندوز را خاموش کرده‌اید، فقط همین مرورگر از رهگذر عبور می‌کند؛ با قطع اتصال خودکار برداشته می‌شود.</li>
+    </ul>
+  </div>
+  <script src="lib.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

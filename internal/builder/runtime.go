@@ -2,6 +2,7 @@ package builder
 
 import (
 	"encoding/json"
+	"os"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -24,6 +25,44 @@ var RuleSetFiles = map[string]string{
 var LearnedFiles = map[string]string{
 	"learned-direct": "learned-direct.json",
 	"learned-proxy":  "learned-proxy.json",
+}
+
+// UserFiles hold the user's per-site choices (from settings / browser extension).
+var UserFiles = map[string]string{
+	"user-proxy":  "user-proxy.json",
+	"user-direct": "user-direct.json",
+	"user-block":  "user-block.json",
+}
+
+// DomainRuleSet renders a source rule-set matching the given domains (and subdomains).
+func DomainRuleSet(domains []string) []byte {
+	d := CleanDomains(domains)
+	if len(d) == 0 {
+		d = []string{"rahgozar.invalid"}
+	}
+	b, _ := json.MarshalIndent(M{"version": 3, "rules": []M{{"domain_suffix": d}}}, "", " ")
+	return b
+}
+
+// WriteUserRules writes the three user rule-set files (only when changed, so
+// sing-box reloads them without dropping connections).
+func WriteUserRules(dir string, proxy, direct, block []string) error {
+	os.MkdirAll(dir, 0o755)
+	for name, list := range map[string][]string{"user-proxy.json": proxy, "user-direct.json": direct, "user-block.json": block} {
+		b := DomainRuleSet(list)
+		path := filepath.Join(dir, name)
+		if old, err := os.ReadFile(path); err == nil && string(old) == string(b) {
+			continue
+		}
+		tmp := path + ".tmp"
+		if err := os.WriteFile(tmp, b, 0o644); err != nil {
+			return err
+		}
+		if err := os.Rename(tmp, path); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // EmptyRuleSet is a valid source rule-set with no effective match.
@@ -93,6 +132,10 @@ func Build(in *Input) (*Result, error) {
 		}
 	}
 	smart := st.RoutingMode == "smart"
+	// per-site user choices: hot-reloaded files, changeable without reconnecting
+	for tag, file := range UserFiles {
+		ruleSets = append(ruleSets, M{"type": "local", "tag": tag, "format": "source", "path": filepath.Join(in.LearnedDir, file)})
+	}
 	if smart {
 		for tag, file := range LearnedFiles {
 			ruleSets = append(ruleSets, M{"type": "local", "tag": tag, "format": "source", "path": filepath.Join(in.LearnedDir, file)})
@@ -127,19 +170,17 @@ func Build(in *Input) (*Result, error) {
 	if st.BypassIran && st.RoutingMode != "global" {
 		dsfx = append(dsfx, "ir")
 	}
-	dsfx = append(dsfx, cleanDomains(st.DirectDomains)...)
 	if len(dsfx) > 0 {
 		directDomainRule["domain_suffix"] = dsfx
 	}
 	if len(directSets) > 0 {
 		directDomainRule["rule_set"] = directSets
 	}
+	dnsRules = append(dnsRules, M{"rule_set": []string{"user-proxy"}, "action": "route", "server": "dns-remote"})
+	dnsRules = append(dnsRules, M{"rule_set": []string{"user-direct"}, "action": "route", "server": "dns-direct"})
 	if smart {
 		// a domain the learner says must be proxied wins over generic Iran rules
 		dnsRules = append(dnsRules, M{"rule_set": []string{"learned-proxy"}, "action": "route", "server": "dns-remote"})
-	}
-	if pd := cleanDomains(st.ProxyDomains); len(pd) > 0 {
-		dnsRules = append(dnsRules, M{"domain_suffix": pd, "action": "route", "server": "dns-remote"})
 	}
 	if len(directDomainRule) > 0 {
 		r := M{"action": "route", "server": "dns-direct"}
@@ -186,9 +227,7 @@ func Build(in *Input) (*Result, error) {
 	if st.BypassLAN {
 		rules = append(rules, M{"ip_is_private": true, "outbound": "direct"})
 	}
-	if bd := cleanDomains(st.BlockDomains); len(bd) > 0 {
-		rules = append(rules, M{"domain_suffix": bd, "action": "reject"})
-	}
+	rules = append(rules, M{"rule_set": []string{"user-block"}, "action": "reject"})
 	if st.BlockAds {
 		var sets []string
 		for _, t := range []string{"geosite-category-ads-all", "geosite-malware", "geosite-phishing"} {
@@ -200,12 +239,8 @@ func Build(in *Input) (*Result, error) {
 			rules = append(rules, M{"rule_set": sets, "action": "reject"})
 		}
 	}
-	if pd := cleanDomains(st.ProxyDomains); len(pd) > 0 {
-		rules = append(rules, M{"domain_suffix": pd, "outbound": "proxy"})
-	}
-	if dd := cleanDomains(st.DirectDomains); len(dd) > 0 {
-		rules = append(rules, M{"domain_suffix": dd, "outbound": "direct"})
-	}
+	rules = append(rules, M{"rule_set": []string{"user-proxy"}, "outbound": "proxy"})
+	rules = append(rules, M{"rule_set": []string{"user-direct"}, "outbound": "direct"})
 	final := "proxy"
 	switch st.RoutingMode {
 	case "smart":
@@ -301,7 +336,7 @@ func isIP(s string) bool {
 	return strings.Count(s, ".") == 3 && strings.Trim(s, "0123456789.") == "" || strings.Contains(s, ":")
 }
 
-func cleanDomains(in []string) []string {
+func CleanDomains(in []string) []string {
 	var out []string
 	seen := map[string]bool{}
 	for _, d := range in {

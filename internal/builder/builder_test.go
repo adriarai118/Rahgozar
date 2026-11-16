@@ -110,6 +110,7 @@ func setupDirs(t *testing.T) (string, string, map[string]bool) {
 	for _, file := range LearnedFiles {
 		os.WriteFile(filepath.Join(learned, file), EmptyRuleSet(), 0o644)
 	}
+	WriteUserRules(learned, []string{"youtube.com"}, []string{"aparat.com"}, []string{"ads.example.com"})
 	return rules, learned, has
 }
 

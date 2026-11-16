@@ -22,6 +22,7 @@ jobs:
         run: |
           go mod tidy
           go test ./internal/parser/ ./internal/smart/ ./internal/engine/
+          CGO_ENABLED=0 go test ./internal/desk/
       - name: Build Rahgozar.exe
         run: |
           VER="$(cat VERSION | tr -d '[:space:]')"
@@ -35,6 +36,11 @@ jobs:
             curl -fsSL -o pkg/rules/$f.srs "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/$f.srs"
           done
           date +%Y%m%d%H%M > pkg/rules/version.txt
+      - name: Browser extension
+        run: |
+          sed -i "s/\"version\": \"[0-9.]*\"/\"version\": \"$VER\"/" extension/manifest.json
+          cp -r extension pkg/extension
+          (cd extension && zip -r ../Rahgozar-extension.zip .)
       - name: Zip
         run: cd pkg && zip -r ../Rahgozar-windows-amd64.zip .
       - uses: softprops/action-gh-release@v2
@@ -42,4 +48,6 @@ jobs:
           tag_name: v${{ env.VER }}
           name: Rahgozar ${{ env.VER }}
           target_commitish: ${{ github.sha }}
-          files: Rahgozar-windows-amd64.zip
+          files: |
+            Rahgozar-windows-amd64.zip
+            Rahgozar-extension.zip

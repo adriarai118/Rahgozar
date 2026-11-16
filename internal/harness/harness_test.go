@@ -106,3 +106,22 @@ func TestHarness(t *testing.T) {
 	go http.ListenAndServe("127.0.0.1:34115", mux)
 	time.Sleep(150 * time.Second)
 }
+
+// TestExtHarness runs the real app core + extension API (auto-approving pairing).
+func TestExtHarness(t *testing.T) {
+	if os.Getenv("EXTHARNESS") == "" {
+		t.Skip()
+	}
+	app := desk.NewApp(nil)
+	var approve func(string)
+	desk.StartHeadless(app, func(n string, d any) {
+		if n == "pairRequest" {
+			id := d.(map[string]string)["id"]
+			go func() { time.Sleep(1500 * time.Millisecond); approve(id) }()
+		}
+	})
+	approve = func(id string) { app.ApprovePair(id, true) }
+	app.ImportText("vless://11111111-2222-3333-4444-555555555555@1.2.3.4:443?type=tcp&security=reality&pbk=abc&sid=12&sni=a.com#آلمان ریلیتی\ntrojan://p@b.com:443#ترکیه تروجان\nhy2://pw@h.example.com:443#فنلاند")
+	fmt.Println("READY")
+	time.Sleep(150 * time.Second)
+}

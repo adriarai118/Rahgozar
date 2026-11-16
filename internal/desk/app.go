@@ -2,11 +2,11 @@ package desk
 
 import (
 	"context"
-	"net/http"
-	goruntime "runtime"
 	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"time"
 
@@ -32,6 +32,8 @@ type App struct {
 	appDir  string
 	update  *core.AppUpdate
 	args    []string
+	api     *extAPI
+	emitFn  func(string, any)
 }
 
 // NewApp wires everything together.
@@ -69,9 +71,11 @@ func writable(dir string) bool {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	a.core.Emit = func(name string, data any) { runtime.EventsEmit(ctx, name, data) }
+	a.emitFn = func(name string, data any) { runtime.EventsEmit(ctx, name, data) }
+	a.core.Emit = a.emitFn
 	a.eng.OnChange = func(s *engine.Status) { runtime.EventsEmit(ctx, "engine", s) }
 	a.core.Init()
+	a.startAPI(a.emitFn)
 	if _, err := a.eng.ExePath("sing-box"); err != nil {
 		// first run: fetch the required engines in the background
 		go func() {
@@ -126,14 +130,14 @@ type AppState struct {
 // ProfileView adds computed fields for the list.
 type ProfileView struct {
 	*model.Profile
-	EngineID  string  `json:"engineId"`
-	Family    string  `json:"family"`
-	Link      string  `json:"link"`
-	Success   float64 `json:"success"`
-	Latency   float64 `json:"latency"`
-	Samples   int     `json:"samples"`
-	LastOK    int64   `json:"lastOk"`
-	LastFail  int64   `json:"lastFail"`
+	EngineID string  `json:"engineId"`
+	Family   string  `json:"family"`
+	Link     string  `json:"link"`
+	Success  float64 `json:"success"`
+	Latency  float64 `json:"latency"`
+	Samples  int     `json:"samples"`
+	LastOK   int64   `json:"lastOk"`
+	LastFail int64   `json:"lastFail"`
 }
 
 func (a *App) views() []*ProfileView {
@@ -179,6 +183,10 @@ func (a *App) SaveSettings(s model.Settings) error {
 	if old.AutoStart != s.AutoStart {
 		sys.SetAutoStart(s.AutoStart)
 	}
+	a.core.WriteUserRules()
+	if (old.ExtAPI != s.ExtAPI || old.ExtPort != s.ExtPort) && a.emitFn != nil {
+		a.startAPI(a.emitFn)
+	}
 	if needsRestart(old, s) && a.core.Status().State == "connected" {
 		go a.core.Reconnect()
 	}
@@ -187,15 +195,15 @@ func (a *App) SaveSettings(s model.Settings) error {
 
 func needsRestart(a, b model.Settings) bool {
 	type key struct {
-		Mode, RoutingMode, RemoteDNS, DirectDNS, TunStack, LogLevel, FragmentLen string
-		Port, MTU                                                              int
+		Mode, RoutingMode, RemoteDNS, DirectDNS, TunStack, LogLevel, FragmentLen   string
+		Port, MTU                                                                  int
 		LAN, BypassLAN, BypassIran, Ads, Fake, Strict, IPv6, Sniff, Frag, Mux, Sys bool
-		P, D, B, Pr                                                            string
+		Pr                                                                         string
 	}
 	k := func(s model.Settings) key {
 		return key{s.Mode, s.RoutingMode, s.RemoteDNS, s.DirectDNS, s.TunStack, s.LogLevel, s.FragmentLen, s.MixedPort, s.TunMTU,
 			s.AllowLAN, s.BypassLAN, s.BypassIran, s.BlockAds, s.FakeIP, s.StrictRoute, s.IPv6, s.Sniff, s.FragmentEnabled, s.MuxEnabled, s.SetSystemProxy,
-			strings.Join(s.ProxyDomains, ","), strings.Join(s.DirectDomains, ","), strings.Join(s.BlockDomains, ","), strings.Join(s.DirectProcesses, ",")}
+			strings.Join(s.DirectProcesses, ",")}
 	}
 	return k(a) != k(b)
 }
@@ -561,16 +569,16 @@ func (a *App) ApplyAppUpdate() error {
 
 // LearningView is the "smart" page data.
 type LearningView struct {
-	NetID     string                `json:"netId"`
-	NetLabel  string                `json:"netLabel"`
-	Networks  map[string]string     `json:"networks"`
-	Families  []smart.FamilyHealth  `json:"families"`
-	Ranking   []RankView            `json:"ranking"`
-	Domains   []smart.DomainInfo    `json:"domains"`
-	Direct    int                   `json:"direct"`
-	Proxy     int                   `json:"proxy"`
-	Unknown   int                   `json:"unknown"`
-	Samples   int                   `json:"samples"`
+	NetID    string               `json:"netId"`
+	NetLabel string               `json:"netLabel"`
+	Networks map[string]string    `json:"networks"`
+	Families []smart.FamilyHealth `json:"families"`
+	Ranking  []RankView           `json:"ranking"`
+	Domains  []smart.DomainInfo   `json:"domains"`
+	Direct   int                  `json:"direct"`
+	Proxy    int                  `json:"proxy"`
+	Unknown  int                  `json:"unknown"`
+	Samples  int                  `json:"samples"`
 }
 
 // RankView is a ranked server.
@@ -640,6 +648,15 @@ func (a *App) CopyText(t string) error { return runtime.ClipboardSetText(a.ctx, 
 // OpenDataDir opens the data folder.
 func (a *App) OpenDataDir() error { return sys.OpenPath(a.dataDir) }
 
+// OpenExtensionDir opens the bundled browser extension folder.
+func (a *App) OpenExtensionDir() error {
+	d := filepath.Join(a.appDir, "extension")
+	if _, err := os.Stat(d); err != nil {
+		return errors.New("پوشه extension کنار برنامه پیدا نشد؛ آن را از صفحه Releases دانلود کنید")
+	}
+	return sys.OpenPath(d)
+}
+
 // OpenURL opens a link in the browser.
 func (a *App) OpenURL(u string) { runtime.BrowserOpenURL(a.ctx, u) }
 
@@ -662,3 +679,12 @@ func goos() string { return goruntime.GOOS }
 
 // Hooks returns the Wails lifecycle callbacks (kept off the JS bindings).
 func Hooks(a *App) (startup, shutdown func(context.Context)) { return a.startup, a.shutdown }
+
+// StartHeadless initialises the core and the extension API without a window
+// (used by tests and the UI harness).
+func StartHeadless(a *App, emit func(string, any)) {
+	a.emitFn = emit
+	a.core.Emit = emit
+	a.core.Init()
+	a.startAPI(emit)
+}

@@ -216,6 +216,9 @@ type Settings struct {
 	FragmentLen     string   `json:"fragmentLen"`
 	FragmentDelay   string   `json:"fragmentDelay"`
 	MuxEnabled      bool     `json:"mux"`
+	ExtAPI          bool     `json:"extApi"`   // local API for the browser extension
+	ExtPort         int      `json:"extPort"`  // 127.0.0.1 port of that API
+	ExtToken        string   `json:"extToken"` // shared secret given to paired extensions
 }
 
 // DefaultSettings returns sensible defaults for Iranian networks.
@@ -253,6 +256,8 @@ func DefaultSettings() Settings {
 		LogLevel:        "warn",
 		FragmentLen:     "10-30",
 		FragmentDelay:   "10-20",
+		ExtAPI:          true,
+		ExtPort:         47123,
 	}
 }
 

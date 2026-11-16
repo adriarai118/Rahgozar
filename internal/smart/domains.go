@@ -210,6 +210,30 @@ func (d *Domains) Observe(host string) {
 	}
 }
 
+// Record stores a probe result made outside the worker queue.
+func (d *Domains) Record(domain, verdict, reason string) {
+	if verdict == VerdictUnknown || domain == "" {
+		return
+	}
+	d.mu.Lock()
+	it := d.items[domain]
+	if it == nil {
+		it = &DomainInfo{Domain: domain, Source: "auto"}
+		d.items[domain] = it
+	}
+	if it.Source == "user" {
+		d.mu.Unlock()
+		return
+	}
+	it.Verdict, it.Reason, it.Checked, it.Fails = verdict, reason, time.Now().Unix(), 0
+	cp := *it
+	d.mu.Unlock()
+	if d.OnLearn != nil {
+		d.OnLearn(&cp)
+	}
+	d.WriteRuleFiles()
+}
+
 // Set forces a verdict chosen by the user ("" or "auto" = relearn).
 func (d *Domains) Set(domain, verdict string) {
 	domain = strings.ToLower(strings.TrimSpace(domain))

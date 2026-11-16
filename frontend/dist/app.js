@@ -165,6 +165,14 @@ API.on('test', r => {
 API.on('testStart', d => { S.testing = true; (d.ids || []).forEach(id => S.tests[id] = { running: true }); if (S.page === 'servers') render(); });
 API.on('testDone', () => { S.testing = false; refreshProfiles(); });
 API.on('toast', t => toast(t.text, t.kind));
+API.on('pairRequest', async r => {
+  const ok = await confirmBox('درخواست اتصال اکستنشن',
+    `اکستنشن «${r.name || 'مرورگر'}» می‌خواهد به رهگذر وصل شود تا بتواند اتصال، سرور و مسیر سایت‌ها را کنترل کند. اگر خودتان دکمه اتصال را در اکستنشن زده‌اید تأیید کنید.`, 'اجازه بده');
+  try { await API.call('ApprovePair', r.id, ok); if (ok) toast('اکستنشن متصل شد', 'ok'); } catch (e) { toast(errText(e), 'error'); }
+});
+const reloadSettings = async () => { S.st = await API.call('GetState'); if (['routing', 'settings', 'home'].includes(S.page)) render(); else renderRail(); };
+API.on('settings', reloadSettings);
+API.on('settingsChanged', reloadSettings);
 API.on('log', lines => {
   S.logs.push(...lines);
   if (S.logs.length > 3000) S.logs.splice(0, S.logs.length - 3000);

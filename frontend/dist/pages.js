@@ -735,6 +735,15 @@ Pages.settings = function () {
     ${sel('theme', 'پوسته', [['dark', 'تیره'], ['light', 'روشن']])}
     ${sel('logLevel', 'سطح گزارش موتورها', [['error', 'فقط خطا'], ['warn', 'هشدار'], ['info', 'اطلاعات'], ['debug', 'جزئیات کامل']])}
   </div></div></div>
+  <div class="section"><h2>اکستنشن مرورگر</h2><div class="panel pad">
+    ${switchRow('extApi', s.extApi, 'اجازه اتصال اکستنشن رهگذر', 'فقط روی همین کامپیوتر (127.0.0.1) و فقط برای اکستنشن‌هایی که خودتان تأیید کنید')}
+    <div class="grid2" style="margin-top:8px">
+      ${inp('extPort', 'پورت ارتباط با اکستنشن', 1, 'number')}
+      <div class="field"><span>وضعیت</span><div style="display:flex;gap:8px;align-items:center;height:38px">${s.extToken ? '<span class="badge ok">اکستنشن جفت شده</span><button class="btn sm danger" type="button" id="revokeExt">قطع دسترسی همه اکستنشن‌ها</button>' : '<span class="badge">هنوز جفت نشده</span>'}</div></div>
+    </div>
+    <p class="mute" style="font-size:12.5px;margin:12px 0 0">برای نصب: در Chrome یا Edge صفحه <span class="ltr">chrome://extensions</span> را باز کنید، «Developer mode» را روشن کنید و پوشه <b>extension</b> کنار Rahgozar.exe را با «Load unpacked» اضافه کنید. سپس در اکستنشن «اتصال به رهگذر» را بزنید و اینجا تأیید کنید.</p>
+    <div style="margin-top:10px"><button class="btn sm" type="button" id="openExt">${icon('folder')}باز کردن پوشه اکستنشن</button></div>
+  </div></div>
   <div class="section"><h2>ابزار ویندوز</h2><div class="panel pad">
     <div class="switch-row"><div class="txt"><b>رفع مشکل L2TP پشت مودم (NAT)</b><small>کلید AssumeUDPEncapsulationContextOnSendRule را تنظیم می‌کند؛ نیاز به دسترسی مدیر و ری‌استارت</small></div><button class="btn sm" type="button" id="fixL2tp">اعمال</button></div>
   </div></div>
@@ -743,7 +752,7 @@ Pages.settings = function () {
 
 Pages.settingsMount = function (v) {
   const f = v.querySelector('#sform');
-  const nums = ['mixedPort', 'tunMtu', 'testTimeoutMs', 'testConcurrency'];
+  const nums = ['mixedPort', 'tunMtu', 'testTimeoutMs', 'testConcurrency', 'extPort'];
   f.addEventListener('change', e => {
     const el = e.target;
     if (!el.name) return;
@@ -752,6 +761,12 @@ Pages.settingsMount = function (v) {
     saveSettings({ [el.name]: val });
   });
   v.querySelector('#openData').onclick = () => API.call('OpenDataDir');
+  v.querySelector('#openExt').onclick = () => API.call('OpenExtensionDir').catch(e => toast(errText(e), 'error'));
+  const rv = v.querySelector('#revokeExt');
+  if (rv) rv.onclick = async () => {
+    if (!await confirmBox('قطع دسترسی اکستنشن‌ها', 'همه اکستنشن‌های جفت‌شده دسترسی‌شان را از دست می‌دهند و باید دوباره جفت شوند.', 'قطع دسترسی', true)) return;
+    await API.call('RevokeExtensions'); S.st = await API.call('GetState'); render();
+  };
   const ba = v.querySelector('#beAdmin'); if (ba) ba.onclick = needAdmin;
   v.querySelector('#fixL2tp').onclick = async () => { try { await API.call('FixL2TP'); toast('اعمال شد؛ ویندوز را ری‌استارت کنید', 'ok'); } catch (e) { toast(errText(e), 'error'); } };
 };
