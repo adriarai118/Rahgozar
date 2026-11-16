@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>رهگذر</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="app">
+  <header class="titlebar" style="--wails-draggable:drag">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" class="brand-mark" aria-hidden="true"><path d="M5 29V15C5 8 10 3 16 1c6 2 11 7 11 14v14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M16 29V14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="3 3"/></svg>
+      <span class="brand-name">رهگذر</span>
+      <span class="brand-ver" id="ver"></span>
+    </div>
+    <div class="title-status" id="titleStatus"></div>
+    <div class="win-ctl" style="--wails-draggable:no-drag">
+      <button class="wbtn" data-act="theme" title="تغییر پوسته"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg></button>
+      <button class="wbtn" data-act="min" title="کوچک کردن"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+      <button class="wbtn" data-act="max" title="بزرگ کردن"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></button>
+      <button class="wbtn close" data-act="quit" title="خروج"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+  </header>
+  <nav class="rail" id="rail"></nav>
+  <main id="view" tabindex="-1"></main>
+</div>
+<div id="modal" class="modal" hidden></div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<script src="api.js"></script>
+<script src="ui.js"></script>
+<script src="pages.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
