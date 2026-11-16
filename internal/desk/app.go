@@ -273,6 +273,7 @@ func (a *App) RelaunchAdmin() error {
 	if err := sys.RelaunchAsAdmin("--wait-pid", strconv.Itoa(os.Getpid())); err != nil {
 		return err
 	}
+	forceExitSoon()
 	runtime.Quit(a.ctx)
 	return nil
 }
@@ -578,6 +579,7 @@ func (a *App) ApplyAppUpdate() error {
 	if err := sys.StartDetached(exe, "--wait-pid", strconv.Itoa(os.Getpid())); err != nil {
 		return err
 	}
+	forceExitSoon()
 	runtime.Quit(a.ctx)
 	return nil
 }
@@ -774,4 +776,13 @@ func EnsureExtension(efs fs.FS, root string) {
 		os.WriteFile(out, b, 0o644)
 		return nil
 	})
+}
+
+// forceExitSoon guarantees the process ends after a relaunch even if the
+// window shutdown hangs, so the new instance can take over.
+func forceExitSoon() {
+	go func() {
+		time.Sleep(5 * time.Second)
+		os.Exit(0)
+	}()
 }

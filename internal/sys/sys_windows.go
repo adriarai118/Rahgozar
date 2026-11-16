@@ -241,6 +241,38 @@ func WaitPID(pid int, timeout time.Duration) {
 	windows.WaitForSingleObject(h, uint32(timeout.Milliseconds()))
 }
 
+// DescendantPIDs lists every process started (directly or indirectly) by pid,
+// e.g. the msedgewebview2.exe processes of a Wails window. It works even
+// after pid itself has exited, because children keep their parent id.
+func DescendantPIDs(pid int) []int {
+	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
+	if err != nil {
+		return nil
+	}
+	defer windows.CloseHandle(snap)
+	parent := map[uint32][]uint32{}
+	var e windows.ProcessEntry32
+	e.Size = uint32(unsafe.Sizeof(e))
+	for err = windows.Process32First(snap, &e); err == nil; err = windows.Process32Next(snap, &e) {
+		parent[e.ParentProcessID] = append(parent[e.ParentProcessID], e.ProcessID)
+	}
+	var out []int
+	queue := []uint32{uint32(pid)}
+	seen := map[uint32]bool{uint32(pid): true}
+	for len(queue) > 0 {
+		p := queue[0]
+		queue = queue[1:]
+		for _, c := range parent[p] {
+			if !seen[c] && c != uint32(os.Getpid()) {
+				seen[c] = true
+				out = append(out, int(c))
+				queue = append(queue, c)
+			}
+		}
+	}
+	return out
+}
+
 // KillPID terminates a process by pid (best effort).
 func KillPID(pid int) {
 	h, err := windows.OpenProcess(windows.PROCESS_TERMINATE, false, uint32(pid))

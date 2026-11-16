@@ -80,6 +80,9 @@ func WaitPID(pid int, timeout time.Duration) {
 	}
 }
 
+// DescendantPIDs is not implemented here.
+func DescendantPIDs(pid int) []int { return nil }
+
 // KillPID terminates a process.
 func KillPID(pid int) { syscall.Kill(pid, syscall.SIGKILL) }
 
