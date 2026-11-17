@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 
 	"rahgozar/internal/model"
@@ -185,6 +186,36 @@ func MihomoProxy(p *model.Profile, name string) (M, error) {
 		if p.ObfsParam != "" {
 			m["obfs-param"] = p.ObfsParam
 		}
+	case model.TWireGuard:
+		m["type"] = "wireguard"
+		m["private-key"] = p.PrivateKey
+		m["public-key"] = p.PeerPublicKey
+		if p.PreSharedKey != "" {
+			m["pre-shared-key"] = p.PreSharedKey
+		}
+		for _, a := range p.LocalAddress {
+			ip := strings.TrimSpace(strings.SplitN(a, "/", 2)[0])
+			if strings.Contains(ip, ":") {
+				if m["ipv6"] == nil {
+					m["ipv6"] = ip
+				}
+			} else if ip != "" && m["ip"] == nil {
+				m["ip"] = ip
+			}
+		}
+		if p.MTU > 0 {
+			m["mtu"] = p.MTU
+		}
+		if len(p.Reserved) > 0 {
+			m["reserved"] = p.Reserved
+		}
+		m["allowed-ips"] = []string{"0.0.0.0/0", "::/0"}
+		// resolve target names inside the tunnel, not with the (poisoned) local DNS
+		m["remote-dns-resolve"] = true
+		m["dns"] = []string{"1.1.1.1", "8.8.8.8"}
+		if o := AWGOptions(p); o != nil {
+			m["amnezia-wg-option"] = o
+		}
 	case model.TShadowsocks:
 		m["type"] = "ss"
 		m["cipher"] = p.Method
@@ -239,6 +270,59 @@ func MihomoProxy(p *model.Profile, name string) (M, error) {
 		return nil, fmt.Errorf("mihomo: unsupported protocol %s", p.Type)
 	}
 	return m, nil
+}
+
+// awgV3Keys maps AmneziaWG 3 .conf keys to Mihomo option names.
+var awgV3Keys = map[string]string{
+	"headerprotectionkey": "header-protection-key", "contentpaddingaddition": "content-padding-addition",
+	"rekeyaftertime": "rekey-after-time", "rekeytimeout": "rekey-timeout", "rejectaftertime": "reject-after-time",
+	"keepalivetimeout": "keepalive-timeout", "maxhandshakeattempts": "max-handshake-attempts",
+	"randomtrailers": "random-trailers", "disablecookies": "disable-cookies",
+}
+
+// AWGOptions returns Mihomo's amnezia-wg-option for a WireGuard profile.
+// Without explicit parameters it sends WireSock-style junk packets
+// (jc=3, 50..1000 bytes), which standard WireGuard servers ignore.
+func AWGOptions(p *model.Profile) M {
+	o := M{"jc": 3, "jmin": 50, "jmax": 1000}
+	v3 := false
+	for k, v := range p.AWG {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		if mk, ok := awgV3Keys[k]; ok {
+			v3 = true
+			if mk == "random-trailers" || mk == "disable-cookies" {
+				o[mk] = strings.EqualFold(v, "true") || strings.EqualFold(v, "yes") || v == "1"
+			} else {
+				o[mk] = v
+			}
+			continue
+		}
+		if n, err := strconv.Atoi(v); err == nil && !strings.HasPrefix(k, "h") && !strings.HasPrefix(k, "i") && k != "itime" {
+			o[k] = n
+		} else if n, err := strconv.ParseInt(v, 10, 64); err == nil && k == "itime" {
+			o[k] = n
+		} else {
+			o[k] = v // H1-H4 (number or range) and I1-I5 packets are strings
+		}
+	}
+	if v3 {
+		o["version"] = 3
+	}
+	if jc, _ := o["jc"].(int); jc <= 0 && len(p.AWG) > 0 {
+		only := true
+		for k := range p.AWG {
+			if k != "jc" && k != "jmin" && k != "jmax" {
+				only = false
+			}
+		}
+		if only {
+			return nil // explicitly plain WireGuard
+		}
+	}
+	return o
 }
 
 // MihomoConfig builds a helper config (JSON is valid YAML).

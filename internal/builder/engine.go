@@ -5,6 +5,10 @@ import (
 	"rahgozar/internal/model"
 )
 
+// HelperAvailable reports whether a helper engine can run here; the core
+// wires it to the engine manager (Android has no Mihomo).
+var HelperAvailable = func(engine string) bool { return false }
+
 // EngineFor decides which engine runs a profile.
 func EngineFor(p *model.Profile) string {
 	if p.IsRAS() {
@@ -15,7 +19,19 @@ func EngineFor(p *model.Profile) string {
 		return model.EngineMihomo
 	case model.TChain:
 		return model.EngineSingBox
-	case model.TOpenVPN, model.THysteria, model.THysteria2, model.TTUIC, model.TWireGuard, model.TAnyTLS, model.TSSH:
+	case model.TWireGuard:
+		// Plain WireGuard is easy prey for DPI. Mihomo adds AmneziaWG junk
+		// packets before the handshake (harmless to standard servers, like
+		// WireSock does by default) and speaks full AmneziaWG.
+		if p.Engine == model.EngineSingBox && len(p.AWG) == 0 {
+			return model.EngineSingBox
+		}
+		// real AmneziaWG servers need it even if Mihomo still has to be installed
+		if HelperAvailable(model.EngineMihomo) || len(p.AWG) > 0 {
+			return model.EngineMihomo
+		}
+		return model.EngineSingBox
+	case model.TOpenVPN, model.THysteria, model.THysteria2, model.TTUIC, model.TAnyTLS, model.TSSH:
 		return model.EngineSingBox
 	}
 	if p.Engine == model.EngineXray || p.Engine == model.EngineMihomo || p.Engine == model.EngineSingBox {

@@ -105,6 +105,7 @@ func New(st *store.Store, eng *engine.Manager, dataDir string) *Core {
 
 // Init performs crash recovery and starts background services.
 func (c *Core) Init() {
+	builder.HelperAvailable = func(e string) bool { return c.Runner != nil && c.Runner.Available(e) == nil }
 	go sys.NetworkID()
 	set := c.Store.Settings()
 	// never leave the user without internet after a crash

@@ -194,6 +194,10 @@ func ParseWGConf(text, name string) (*model.Profile, error) {
 	section := ""
 	for _, line := range strings.Split(text, "\n") {
 		line = strings.TrimSpace(line)
+		// WireSock-only directives are hidden from other clients as "#@ws:"
+		if strings.HasPrefix(strings.ToLower(line), "#@ws:") {
+			line = strings.TrimSpace(line[5:])
+		}
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
@@ -225,6 +229,13 @@ func ParseWGConf(text, name string) (*model.Profile, error) {
 			}
 		case "peer.reserved", "interface.reserved":
 			p.Reserved = parseReserved(v)
+		default:
+			if isAWGKey(k) {
+				if p.AWG == nil {
+					p.AWG = map[string]string{}
+				}
+				p.AWG[k] = v
+			}
 		}
 	}
 	if p.PrivateKey == "" || p.PeerPublicKey == "" || p.Server == "" {
@@ -235,6 +246,19 @@ func ParseWGConf(text, name string) (*model.Profile, error) {
 		p.Name = fmt.Sprintf("WireGuard %s:%d", p.Server, p.Port)
 	}
 	return p, nil
+}
+
+// isAWGKey reports AmneziaWG obfuscation parameters.
+func isAWGKey(k string) bool {
+	switch k {
+	case "jc", "jmin", "jmax", "s1", "s2", "s3", "s4", "h1", "h2", "h3", "h4", "i1", "i2", "i3", "i4", "i5",
+		"j1", "j2", "j3", "itime", // AWG 1.5
+		// AWG 3
+		"headerprotectionkey", "contentpaddingaddition", "rekeyaftertime", "rekeytimeout",
+		"rejectaftertime", "keepalivetimeout", "maxhandshakeattempts", "randomtrailers", "disablecookies":
+		return true
+	}
+	return false
 }
 
 // ---------- Clash / Mihomo YAML ----------
@@ -400,6 +424,16 @@ func ParseClashYAML(text string) ([]*model.Profile, []error) {
 				p.LocalAddress = append(p.LocalAddress, ip)
 			}
 			p.MTU = atoi(ystr(m, "mtu"))
+			if o, ok := m["amnezia-wg-option"].(map[string]any); ok {
+				for k, v := range o {
+					if k = strings.ToLower(k); isAWGKey(k) && v != nil {
+						if p.AWG == nil {
+							p.AWG = map[string]string{}
+						}
+						p.AWG[k] = fmt.Sprint(v)
+					}
+				}
+			}
 			if r, ok := m["reserved"].([]any); ok {
 				for _, x := range r {
 					p.Reserved = append(p.Reserved, atoi(fmt.Sprint(x)))

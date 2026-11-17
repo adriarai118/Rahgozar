@@ -672,6 +672,14 @@ func parseWGLink(link string) (*model.Profile, error) {
 	p.LocalAddress = splitList(firstNonEmpty(q.Get("address"), q.Get("ip")))
 	p.Reserved = parseReserved(q.Get("reserved"))
 	p.MTU = atoi(q.Get("mtu"))
+	for k, v := range q {
+		if lk := strings.ToLower(k); isAWGKey(lk) && len(v) > 0 && v[0] != "" {
+			if p.AWG == nil {
+				p.AWG = map[string]string{}
+			}
+			p.AWG[lk] = v[0]
+		}
+	}
 	if p.Port == 0 {
 		p.Port = 51820
 	}

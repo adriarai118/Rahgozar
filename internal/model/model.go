@@ -105,6 +105,9 @@ type Profile struct {
 	LocalAddress  []string `json:"localAddress,omitempty"`
 	Reserved      []int    `json:"reserved,omitempty"`
 	MTU           int      `json:"mtu,omitempty"`
+	// AmneziaWG / WireSock obfuscation (jc, jmin, jmax, s1-s4, h1-h4, i1-i5),
+	// keys lower-case. jc=0 turns junk packets off.
+	AWG map[string]string `json:"awg,omitempty"`
 
 	// OpenVPN (raw .ovpn) / RAS
 	OVPN     string `json:"ovpn,omitempty"`

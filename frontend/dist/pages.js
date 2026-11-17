@@ -446,21 +446,24 @@ const FIELDS = [
   { k: 'localAddress', l: 'آدرس داخلی (با کاما)', t: ['wireguard'], ltr: 1, list: 1 },
   { k: 'reserved', l: 'Reserved (مثلاً 1,2,3)', t: ['wireguard'], ltr: 1, ints: 1 },
   { k: 'mtu', l: 'MTU', t: ['wireguard'], n: 1 },
+  { k: 'awg', l: 'AmneziaWG / پکت‌های گمراه‌کننده (هر خط: Jc = 4)', t: ['wireguard'], ltr: 1, area: 1, kv: 1 },
   { k: 'psk', l: 'کلید اشتراکی (PSK)', t: ['l2tp'], ltr: 1 },
   { k: 'ovpnNet', l: 'پروتکل انتقال', t: ['openvpn'], s: ['', 'udp', 'tcp'] },
   { k: 'ovpn', l: 'محتوای فایل .ovpn', t: ['openvpn'], ltr: 1, area: 1 },
   { k: 'engine', l: 'موتور', t: [...V2, 'shadowsocks'], s: ['auto', 'sing-box', 'xray', 'mihomo'] },
+  { k: 'engine', l: 'موتور (خودکار = Mihomo با پکت‌های گمراه‌کننده)', t: ['wireguard'], s: ['auto', 'mihomo', 'sing-box'] },
 ];
 
 function fieldHTML(f, p) {
   let v = p[f.k];
   if (f.list && Array.isArray(v)) v = v.join(', ');
   if (f.ints && Array.isArray(v)) v = v.join(',');
+  if (f.kv) v = v && typeof v === 'object' ? Object.entries(v).map(([a, b]) => a.charAt(0).toUpperCase() + a.slice(1) + ' = ' + b).join('\n') : '';
   if (v == null) v = '';
   const span = f.area ? 'span2' : '';
   if (f.b) return `<div class="span2">${switchRow(f.k, !!v, f.l, '')}</div>`;
   if (f.s) return `<label class="field ${span}"><span>${f.l}</span><select class="input ltr" name="${f.k}">${f.s.map(o => `<option value="${o}" ${String(v) === o ? 'selected' : ''}>${o || '—'}</option>`).join('')}</select></label>`;
-  if (f.area) return `<label class="field span2"><span>${f.l}</span><textarea class="input ltr" name="${f.k}" rows="${f.k === 'ovpn' ? 10 : 3}">${esc(v)}</textarea></label>`;
+  if (f.area) return `<label class="field span2"><span>${f.l}</span><textarea class="input ltr" name="${f.k}" rows="${f.k === 'ovpn' ? 10 : f.kv ? 4 : 3}" ${f.kv ? 'placeholder="خالی = Jc 3، اندازه 50 تا 1000 (مثل WireSock)\nJc = 0 برای WireGuard ساده"' : ''}>${esc(v)}</textarea></label>`;
   return `<label class="field ${span}"><span>${f.l}</span><input class="input ${f.ltr || f.n ? 'ltr' : ''}" ${f.n ? 'type="number"' : ''} name="${f.k}" value="${esc(v)}"></label>`;
 }
 
@@ -501,6 +504,11 @@ function readEditor(m, p) {
     else if (el.type === 'number' || (f && f.n)) out[k] = el.value === '' ? 0 : Number(el.value);
     else if (f && f.list) out[k] = el.value.split(/[,\s]+/).filter(Boolean);
     else if (f && f.ints) out[k] = el.value.split(/[,\s]+/).filter(Boolean).map(Number);
+    else if (f && f.kv) {
+      const o = {};
+      el.value.split('\n').forEach(l => { const i = l.indexOf('='); if (i > 0) { const a = l.slice(0, i).trim().toLowerCase(), b = l.slice(i + 1).trim(); if (a && b) o[a] = b; } });
+      out[k] = Object.keys(o).length ? o : null;
+    }
     else out[k] = el.value;
   });
   if (out.engine === 'auto') out.engine = '';

@@ -130,6 +130,9 @@ func ToLink(p *model.Profile) string {
 		if p.MTU > 0 {
 			q.Set("mtu", strconv.Itoa(p.MTU))
 		}
+		for k, v := range p.AWG {
+			q.Set(k, v)
+		}
 		return "wireguard://" + url.PathEscape(p.PrivateKey) + "@" + hp + "?" + q.Encode() + frag
 	case model.TSocks, model.THTTP, model.TSSH:
 		scheme := map[string]string{model.TSocks: "socks", model.THTTP: "http", model.TSSH: "ssh"}[p.Type]

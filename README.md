@@ -48,11 +48,14 @@
 |---|---|:-:|:-:|
 | VLESS، VMess، Trojan، Reality، WS، gRPC، HTTPUpgrade، Shadowsocks (+plugin)، SOCKS5، HTTP(S)، SSH، AnyTLS | sing-box | ✓ | ✓ |
 | Hysteria، Hysteria2 (پرش پورت)، TUIC | sing-box | ✓ | ✓ |
-| WireGuard، OpenVPN (TCP/UDP، بدون درایور) | sing-box | ✓ | ✓ |
+| WireGuard + AmneziaWG (1.0 / 1.5 / 2.0 / 3) | Mihomo | ✓ | فقط WireGuard ساده (sing-box) |
+| OpenVPN (TCP/UDP، بدون درایور) | sing-box | ✓ | ✓ |
 | XHTTP، mKCP، VLESS Encryption، هدر HTTP روی TCP | Xray-core | ✓ | ✓ |
 | ShadowsocksR | Mihomo | ✓ | — |
 | PPTP، L2TP/IPsec، SSTP، IKEv2 | VPN داخلی ویندوز | ✓ | — |
 | TUN، DNS (DoH/DoT)، زنجیره پروکسی، مسیریابی | sing-box | ✓ | ✓ |
+
+**WireGuard در برابر DPI:** در ویندوز سرورهای WireGuard به‌طور پیش‌فرض با Mihomo اجرا می‌شوند و قبل از هر handshake چند پکت تصادفی (Jc=3، 50 تا 1000 بایت) می‌فرستند؛ همان کاری که WireSock به‌طور پیش‌فرض می‌کند. سرور WireGuard معمولی این پکت‌ها را نادیده می‌گیرد، اما DPI را گمراه می‌کند. پارامترهای AmneziaWG (Jc، Jmin، Jmax، S1-S4، H1-H4 حتی به‌صورت بازه، I1-I5 و کلیدهای نسخه 3) و خط‌های `#@ws:` فایل‌های WireSock خوانده می‌شوند و در ویرایش سرور قابل تغییرند. `Jc = 0` یا انتخاب موتور sing-box یعنی WireGuard ساده.
 
 ورودی‌ها: لینک‌های اشتراک‌گذاری، اشتراک base64، YAML کلش/میهومو، JSON سینگ‌باکس، فایل `.ovpn` و `.conf` وایرگارد.
 
