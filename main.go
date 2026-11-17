@@ -58,10 +58,15 @@ func main() {
 	plat := &wailsPlatform{}
 	app := desk.NewApp(desk.Options{Platform: plat})
 	start := options.Normal
+	startHidden := false
 	for _, a := range os.Args[1:] {
 		if a == "--minimized" {
 			start = options.Minimised
+			startHidden = true
 		}
+	}
+	if startHidden && desk.CloseToTray(app) {
+		start = options.Normal
 	}
 	// Watchdog: if the page never finishes loading (window stays invisible),
 	// start a fresh instance once instead of leaving a ghost process.
@@ -86,11 +91,28 @@ func main() {
 		MinHeight:        620,
 		Frameless:        true,
 		WindowStartState: start,
+		// started with Windows: stay in the tray instead of a minimised window
+		StartHidden:      startHidden && desk.CloseToTray(app),
 		BackgroundColour: &options.RGBA{R: 13, G: 24, B: 38, A: 255},
 		AssetServer:      &assetserver.Options{Assets: frontend.Assets},
-		OnStartup:        func(ctx context.Context) { plat.ctx = ctx; desk.Start(app) },
-		OnShutdown:       func(ctx context.Context) { desk.Stop(app) },
-		Bind:             []interface{}{app},
+		OnStartup: func(ctx context.Context) {
+			plat.ctx = ctx
+			desk.Start(app)
+			startTray(app, plat)
+		},
+		OnShutdown: func(ctx context.Context) { theTray.close(); desk.Stop(app) },
+		// Alt+F4 / taskbar "Close window": hide to the tray when enabled
+		OnBeforeClose: func(ctx context.Context) bool {
+			if quitting.Load() {
+				return false
+			}
+			if desk.CloseToTray(app) && plat.HideToTray() {
+				return true
+			}
+			quitting.Store(true)
+			return false
+		},
+		Bind: []interface{}{app},
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId:               "rahgozar-vpn-7f3c",
 			OnSecondInstanceLaunch: func(options.SecondInstanceData) { desk.Focus(app) },

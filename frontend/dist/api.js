@@ -147,7 +147,7 @@
     ClearLogs: async () => {}, CopyText: async () => {}, OpenDataDir: async () => {}, OpenURL: async () => {}, FixL2TP: async () => {},
     RelaunchAdmin: async () => {},
     AndroidApps: async () => [{ pkg: 'org.telegram.messenger', name: 'Telegram' }, { pkg: 'com.instagram.android', name: 'Instagram' }, { pkg: 'ir.mobillet.app', name: 'موبایلت' }, { pkg: 'com.android.chrome', name: 'Chrome' }],
-    ApprovePair: async () => {}, RevokeExtensions: async () => {}, OpenExtensionDir: async () => {}, WindowMinimise: async () => {}, WindowToggleMaximise: async () => {}, Quit: async () => {}
+    ApprovePair: async () => {}, RevokeExtensions: async () => {}, OpenExtensionDir: async () => {}, WindowMinimise: async () => {}, WindowToggleMaximise: async () => {}, Quit: async () => {}, CloseWindow: async () => {}
   };
 
   window.API = { call, on, real, android };

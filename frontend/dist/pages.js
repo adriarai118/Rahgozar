@@ -734,7 +734,8 @@ Pages.settings = function () {
   <div class="section"><h2>اتصال هوشمند</h2><div class="panel pad">
     ${switchRow('autoFailover', s.autoFailover, 'تعویض خودکار سرور', 'اگر سرور فعلی سه بار پشت سر هم جواب نداد، بهترین سرور بعدی جایگزین می‌شود')}
     ${switchRow('connectOnStart', s.connectOnStart, 'اتصال خودکار هنگام باز شدن برنامه', '')}
-    <div class="win-only">${switchRow('autoStart', s.autoStart, 'اجرا همراه ویندوز', '')}</div>
+    <div class="win-only">${switchRow('autoStart', s.autoStart, 'اجرا همراه ویندوز', 'با روشن بودن گزینه زیر، برنامه مستقیم در System Tray اجرا می‌شود')}</div>
+    <div class="win-only">${switchRow('minimizeToTray', s.minimizeToTray, 'بستن پنجره به System Tray', 'دکمه ضربدر برنامه را نمی‌بندد و به کنار ساعت ویندوز می‌برد؛ کلیک راست روی آیکون، منوی سریع دارد. خروج کامل از همان منو')}</div>
   </div></div>
   <div class="section"><h2>پروکسی و TUN</h2><div class="panel pad">
     <div class="grid3">

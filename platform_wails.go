@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	wr "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -44,7 +45,7 @@ func (p *wailsPlatform) OpenURL(url string)         { wr.BrowserOpenURL(p.ctx, u
 func (p *wailsPlatform) OpenPath(path string) error { return sys.OpenPath(path) }
 func (p *wailsPlatform) Minimise()                  { wr.WindowMinimise(p.ctx) }
 func (p *wailsPlatform) ToggleMaximise()            { wr.WindowToggleMaximise(p.ctx) }
-func (p *wailsPlatform) Quit()                      { wr.Quit(p.ctx) }
+func (p *wailsPlatform) Quit()                      { quitting.Store(true); wr.Quit(p.ctx) }
 func (p *wailsPlatform) TunAllowed() bool           { return sys.IsAdmin() }
 
 func (p *wailsPlatform) Focus() {
@@ -58,6 +59,22 @@ func (p *wailsPlatform) Focus() {
 		time.Sleep(300 * time.Millisecond)
 		wr.WindowSetAlwaysOnTop(p.ctx, false)
 	}()
+}
+
+// quitting is set when the app really exits, so closing the window doesn't
+// just hide it to the tray.
+var quitting atomic.Bool
+
+// HideToTray hides the window; the tray icon brings it back.
+func (p *wailsPlatform) HideToTray() bool {
+	if p.ctx == nil || theTray == nil || !theTray.ready.Load() {
+		return false
+	}
+	wr.WindowHide(p.ctx)
+	if theTray.hinted.CompareAndSwap(false, true) {
+		theTray.balloon("رهگذر هنوز در حال اجراست", "برای باز کردن روی آیکون رهگذر کلیک کنید؛ کلیک راست برای منوی سریع.")
+	}
+	return true
 }
 
 // Relaunch starts a new instance that waits for this one, then quits.
@@ -74,6 +91,7 @@ func (p *wailsPlatform) Relaunch(admin bool) error {
 		return err
 	}
 	forceExitSoon()
+	quitting.Store(true)
 	wr.Quit(p.ctx)
 	return nil
 }

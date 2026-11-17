@@ -138,7 +138,7 @@ document.addEventListener('click', e => {
     const a = w.dataset.act;
     if (a === 'min') API.call('WindowMinimise');
     if (a === 'max') API.call('WindowToggleMaximise');
-    if (a === 'quit') API.call('Quit');
+    if (a === 'quit') API.call('CloseWindow');
     if (a === 'theme') saveSettings({ theme: S.st.settings.theme === 'light' ? 'dark' : 'light' }).then(() => S.page === 'home' && render());
   }
 });
@@ -165,6 +165,8 @@ API.on('test', r => {
 API.on('testStart', d => { S.testing = true; (d.ids || []).forEach(id => S.tests[id] = { running: true }); if (S.page === 'servers') render(); });
 API.on('testDone', () => { S.testing = false; refreshProfiles(); });
 API.on('toast', t => toast(t.text, t.kind));
+API.on('navigate', p => navigate(p));
+API.on('needAdmin', () => needAdmin());
 API.on('pairRequest', async r => {
   const ok = await confirmBox('درخواست اتصال اکستنشن',
     `اکستنشن «${r.name || 'مرورگر'}» می‌خواهد به رهگذر وصل شود تا بتواند اتصال، سرور و مسیر سایت‌ها را کنترل کند. اگر خودتان دکمه اتصال را در اکستنشن زده‌اید تأیید کنید.`, 'اجازه بده');

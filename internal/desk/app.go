@@ -801,6 +801,45 @@ func (a *App) Quit() {
 	a.plat.Quit()
 }
 
+// trayCapable platforms can hide the window to the notification area.
+type trayCapable interface{ HideToTray() bool }
+
+// CloseWindow handles the window's close button: hide to the system tray
+// when enabled, otherwise quit.
+func (a *App) CloseWindow() {
+	if a.store.Settings().MinimizeToTray {
+		if t, ok := a.plat.(trayCapable); ok && t.HideToTray() {
+			return
+		}
+	}
+	a.Quit()
+}
+
+// CloseToTray reports whether closing the window should hide it (tray).
+func CloseToTray(a *App) bool { return a.store.Settings().MinimizeToTray }
+
+// Emit sends an event to the UI (used by the tray menu).
+func Emit(a *App, name string, data any) { a.emit(name, data) }
+
+// TestAll tests every server (UI gets the usual events) and returns how many
+// answered.
+func TestAll(a *App) (ok, total int) {
+	var ids []string
+	for _, p := range a.store.Profiles() {
+		ids = append(ids, p.ID)
+	}
+	for _, r := range a.core.TestProfiles(ids) {
+		if r.NA {
+			continue
+		}
+		total++
+		if r.OK {
+			ok++
+		}
+	}
+	return
+}
+
 // Focus brings the window to the front (second instance launched).
 func Focus(a *App) { a.plat.Focus() }
 
