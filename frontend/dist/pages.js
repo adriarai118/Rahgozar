@@ -290,7 +290,7 @@ Pages.serverRowUpdate = function (id) {
 
 // ---------------- backup ----------------
 
-const BACKUP_KIND = { rahgozar: 'پشتیبان رهگذر', wgtunnel: 'پشتیبان WG Tunnel', zip: 'آرشیو کانفیگ', exclave: 'پشتیبان Exclave' };
+const BACKUP_KIND = { rahgozar: 'پشتیبان رهگذر', wgtunnel: 'پشتیبان WG Tunnel', zip: 'آرشیو کانفیگ', exclave: 'پشتیبان Exclave', v2rayng: 'پشتیبان v2rayNG' };
 
 function openBackupCreate() {
   Modal.open(`<div class="dialog sm" role="dialog" aria-modal="true"><header><h3>ساخت فایل پشتیبان</h3></header><div class="body">
@@ -323,7 +323,7 @@ function exclaveRows(sm) {
   return `<div class="kv"><span>اشتراک‌ها</span><b>${fa(sm.subs)}</b><span>سرورهای دستی</span><b>${fa(sm.manual)}</b><span>سرورهای اشتراک‌ها</span><b>${fa(sm.subServers)}</b>${skipped ? `<span>رد می‌شوند</span><b style="font-weight:400">${skipped}</b>` : ''}</div>
     ${switchRow('rsServers', true, 'سرورهای دستی', 'سرورهایی که بیرون از اشتراک‌ها اضافه کرده‌اید')}
     ${switchRow('rsSubs', true, 'اشتراک‌ها', 'لینک اشتراک‌ها اضافه می‌شود؛ سرورهایشان با «به‌روزرسانی» تازه می‌آیند')}
-    ${switchRow('rsSubServers', false, 'سرورهای ذخیره‌شده اشتراک‌ها', sm.subServers > 5000 ? `${fa(sm.subServers)} سرور؛ لیست سنگین می‌شود. بهتر است اشتراک‌ها را به‌روزرسانی کنید` : 'نسخه‌ای که Exclave آخرین بار دریافت کرده')}`;
+    ${switchRow('rsSubServers', sm.subServers <= 5000, 'سرورهای ذخیره‌شده اشتراک‌ها', sm.subServers > 5000 ? `${fa(sm.subServers)} سرور؛ لیست سنگین می‌شود. بهتر است اشتراک‌ها را به‌روزرسانی کنید` : 'نسخه‌ای که برنامه قبلی آخرین بار دریافت کرده')}`;
 }
 
 async function openBackupRestore() {
@@ -925,7 +925,7 @@ Pages.settings = function () {
   <div class="section"><h2>پشتیبان‌گیری و بازیابی</h2><div class="panel pad">
     <p class="mute" style="font-size:12.5px;margin:0 0 12px">سرورها، اشتراک‌ها، تنظیمات و یادگیری را در یک فایل نگه دارید و روی ویندوز یا گوشی دیگر برگردانید. بازیابی چیزی را پاک نمی‌کند؛ فقط موارد تازه اضافه می‌شوند.</p>
     <div style="gap:8px;display:flex;flex-wrap:wrap"><button class="btn primary" type="button" id="mkBackup">${icon('download')}ساخت فایل پشتیبان</button><button class="btn" type="button" id="restoreBackup">${icon('upload')}بازیابی یا وارد کردن از برنامه دیگر</button></div>
-    <p class="mute" style="font-size:12px;margin:12px 0 0">قابل خواندن: پشتیبان رهگذر (<span class="ltr">.rgbak</span>)، پشتیبان کامل و خروجی zip برنامه WG Tunnel (با رمز یا بدون رمز)، zip کانفیگ‌های WireGuard / WireSock / AmneziaWG، و فایل‌های <span class="ltr">.conf</span>، <span class="ltr">.ovpn</span>، Clash و <span class="ltr">sing-box</span>.</p>
+    <p class="mute" style="font-size:12px;margin:12px 0 0">قابل خواندن: پشتیبان رهگذر (<span class="ltr">.rgbak</span>)، پشتیبان Exclave و v2rayNG، پشتیبان کامل و خروجی zip برنامه WG Tunnel (با رمز یا بدون رمز)، zip کانفیگ‌های WireGuard / WireSock / AmneziaWG، و فایل‌های <span class="ltr">.conf</span>، <span class="ltr">.ovpn</span>، Clash و <span class="ltr">sing-box</span>.</p>
   </div></div>
   <div class="section"><h2>ظاهر و گزارش</h2><div class="panel pad"><div class="grid2">
     ${sel('theme', 'پوسته', [['dark', 'تیره'], ['light', 'روشن']])}

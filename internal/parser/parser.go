@@ -74,7 +74,12 @@ func ParseText(text string) ([]*model.Profile, []error) {
 	if isClashYAML(text) {
 		return ParseClashYAML(text)
 	}
-	if strings.HasPrefix(text, "{") {
+	if strings.HasPrefix(text, "{") || strings.HasPrefix(text, "[") {
+		if isXrayJSON(text) {
+			if ps, errs := ParseXrayJSON(text); len(ps) > 0 {
+				return ps, errs
+			}
+		}
 		if ps, errs := ParseSingBoxJSON(text); len(ps) > 0 {
 			return ps, errs
 		}

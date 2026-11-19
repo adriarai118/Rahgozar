@@ -18,7 +18,10 @@ import (
 func TestExclaveRestore(t *testing.T) {
 	f := os.Getenv("EXCLAVE_BACKUP")
 	if f == "" {
-		t.Skip("EXCLAVE_BACKUP not set")
+		f = os.Getenv("V2RAYNG_BACKUP")
+	}
+	if f == "" {
+		t.Skip("EXCLAVE_BACKUP / V2RAYNG_BACKUP not set")
 	}
 	p := &filePlat{pick: f}
 	a := newTestApp(t, p)

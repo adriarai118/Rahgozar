@@ -161,6 +161,9 @@ func Detect(b []byte, name string) Info {
 	if err != nil {
 		return Info{}
 	}
+	if isV2rayNG(zr) {
+		return Info{Kind: KindV2rayNG}
+	}
 	files := map[string]*zip.File{}
 	for _, f := range zr.File {
 		files[f.Name] = f

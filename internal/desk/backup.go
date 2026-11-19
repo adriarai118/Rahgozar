@@ -117,8 +117,8 @@ func (a *App) OpenBackup() (*BackupFile, error) {
 	name := filepath.Base(files[0])
 	info := backup.Detect(b, name)
 	bf := &BackupFile{Name: name, Kind: info.Kind, Encrypted: info.Encrypted, Manifest: info.Manifest}
-	if info.Kind == backup.KindExclave {
-		ex, err := backup.Exclave(b)
+	if info.Kind == backup.KindExclave || info.Kind == backup.KindV2rayNG {
+		ex, err := decodeForeign(b, info.Kind)
 		if err != nil {
 			return nil, err
 		}
@@ -325,8 +325,8 @@ func (a *App) importForeign(b []byte, name string, kind backup.Kind, password st
 		items, err = backup.WGTunnel(b, name, password)
 	case backup.KindZip:
 		items, err = backup.ZipConfigs(b)
-	case backup.KindExclave:
-		ex, err := backup.Exclave(b)
+	case backup.KindExclave, backup.KindV2rayNG:
+		ex, err := decodeForeign(b, kind)
 		if err != nil {
 			return ImportResult{Errors: []string{err.Error()}}
 		}
@@ -350,6 +350,13 @@ func (a *App) importForeign(b []byte, name string, kind backup.Kind, password st
 		total.Errors = append(total.Errors, r.Errors...)
 	}
 	return total
+}
+
+func decodeForeign(b []byte, k backup.Kind) (*backup.ExclaveData, error) {
+	if k == backup.KindV2rayNG {
+		return backup.V2rayNG(b)
+	}
+	return backup.Exclave(b)
 }
 
 func exclaveSummary(ex *backup.ExclaveData) *ForeignSummary {
@@ -395,7 +402,7 @@ func (a *App) restoreExclave(ex *backup.ExclaveData, o RestoreOptions) ImportRes
 		}
 		name := g.Name
 		if name == "" {
-			name = "Exclave"
+			name = "اشتراک"
 		}
 		sub := &model.Subscription{Name: name, URL: u, UserAgent: g.UserAgent, AutoUpdate: true, IntervalH: 12, ViaProxy: true}
 		a.store.UpsertSub(sub)
