@@ -5,6 +5,7 @@
 package smart
 
 import (
+	"encoding/json"
 	"math"
 	"sort"
 	"strconv"
@@ -321,4 +322,40 @@ func (l *Learner) Reset() {
 	l.Families = map[string]map[string]*Stat{}
 	l.Total = 0
 	l.dirty = true
+}
+
+// MergeJSON adds statistics from a backup (a serialised Learner) that this
+// learner doesn't have yet; existing local stats win.
+func (l *Learner) MergeJSON(b []byte) error {
+	var o Learner
+	if err := json.Unmarshal(b, &o); err != nil {
+		return err
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.ensure()
+	merge := func(dst, src map[string]map[string]*Stat) {
+		for a, m := range src {
+			if dst[a] == nil {
+				dst[a] = map[string]*Stat{}
+			}
+			for k, s := range m {
+				if s != nil && dst[a][k] == nil {
+					dst[a][k] = s
+				}
+			}
+		}
+	}
+	merge(l.Servers, o.Servers)
+	merge(l.Families, o.Families)
+	for k, v := range o.Networks {
+		if l.Networks[k] == "" {
+			l.Networks[k] = v
+		}
+	}
+	if o.Total > l.Total {
+		l.Total = o.Total
+	}
+	l.dirty = true
+	return nil
 }

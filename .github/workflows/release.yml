@@ -27,7 +27,7 @@ jobs:
       - name: Test
         run: |
           go mod tidy
-          go test ./internal/parser/ ./internal/smart/ ./internal/engine/ ./internal/geo/
+          go test ./internal/parser/ ./internal/smart/ ./internal/engine/ ./internal/geo/ ./internal/backup/ ./internal/qr/
           CGO_ENABLED=0 go test ./internal/desk/
       - name: Build Rahgozar.exe
         run: |

@@ -32,6 +32,7 @@ class MainActivity : Activity() {
     private var pageReady = false
     private var pendingConnect: Int? = null
     private var pendingScan: Int? = null
+    private var pendingSave: String? = null
     private val pendingShare = mutableListOf<String>()
 
     companion object {
@@ -39,6 +40,7 @@ class MainActivity : Activity() {
         private const val REQ_FILES = 11
         private const val REQ_NOTIF = 12
         private const val REQ_QR = 13
+        private const val REQ_SAVE = 14
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -225,6 +227,25 @@ class MainActivity : Activity() {
         }
     }
 
+    /** System "save as" for a file Go prepared (backups). */
+    fun saveFile(path: String, name: String) {
+        pendingSave = path
+        val i = Intent(Intent.ACTION_CREATE_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("application/octet-stream")
+            .putExtra(Intent.EXTRA_TITLE, name)
+        try {
+            startActivityForResult(i, REQ_SAVE)
+        } catch (e: Exception) {
+            pendingSave = null
+            toast("ذخیره فایل ممکن نشد", "error")
+        }
+    }
+
+    private fun toast(text: String, kind: String) {
+        dispatchEvent("toast", JSONObject().put("text", text).put("kind", kind).toString())
+    }
+
     private fun copyToCache(uri: Uri): String? {
         var name = "import"
         try {
@@ -259,6 +280,25 @@ class MainActivity : Activity() {
                     }
                 } else if (id >= 0) {
                     resolve(id, JSONObject().put("error", "اجازه ساخت VPN داده نشد").toString())
+                }
+            }
+            REQ_SAVE -> {
+                val src = pendingSave ?: return
+                pendingSave = null
+                val uri = data?.data
+                if (resultCode != RESULT_OK || uri == null) {
+                    File(src).delete()
+                    return
+                }
+                App.io.execute {
+                    try {
+                        contentResolver.openOutputStream(uri)?.use { out -> File(src).inputStream().use { it.copyTo(out) } }
+                        toast("فایل پشتیبان ذخیره شد", "ok")
+                    } catch (e: Exception) {
+                        toast("ذخیره فایل ممکن نشد: " + (e.message ?: ""), "error")
+                    } finally {
+                        File(src).delete()
+                    }
                 }
             }
             REQ_QR -> {

@@ -336,3 +336,27 @@ func (d *Domains) WriteRuleFiles() {
 	b, _ := json.MarshalIndent(list, "", " ")
 	os.WriteFile(filepath.Join(d.dir, "domains.json"), b, 0o644)
 }
+
+// Import adds domains this device hasn't learned yet (backup restore); it
+// never overrides what is already known here. Returns how many were added.
+func (d *Domains) Import(list []DomainInfo) int {
+	d.mu.Lock()
+	n := 0
+	for i := range list {
+		v := list[i]
+		v.Domain = strings.ToLower(strings.TrimSpace(v.Domain))
+		if v.Domain == "" || d.items[v.Domain] != nil {
+			continue
+		}
+		d.items[v.Domain] = &v
+		n++
+	}
+	if n > 0 {
+		d.dirty = true
+	}
+	d.mu.Unlock()
+	if n > 0 {
+		d.WriteRuleFiles()
+	}
+	return n
+}

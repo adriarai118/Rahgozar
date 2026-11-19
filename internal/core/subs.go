@@ -108,6 +108,9 @@ func (c *Core) RemoveDead(res []TestResult, guardAll bool) (int, error) {
 	return len(dead), nil
 }
 
+// RecountSubs refreshes each subscription's server count.
+func (c *Core) RecountSubs() { c.recountSubs() }
+
 func (c *Core) recountSubs() {
 	n := map[string]int{}
 	for _, p := range c.Store.Profiles() {

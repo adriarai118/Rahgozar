@@ -30,6 +30,8 @@ type Host interface {
 	// PickFiles opens the system picker; the app answers with FilesPicked.
 	PickFiles(mimeTypes string, multiple bool)
 	OpenURL(url string)
+	// SaveFile asks the user where to save a file (system picker) and copies it there.
+	SaveFile(path, name string)
 	// InstallAPK starts the package installer for a downloaded update.
 	InstallAPK(path string) error
 	// Interfaces returns the network interfaces as JSON.

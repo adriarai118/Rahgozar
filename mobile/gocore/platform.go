@@ -30,6 +30,22 @@ func (p *androidPlatform) Emit(name string, data any) {
 	p.host.Emit(name, string(b))
 }
 
+// SaveFile hands the file to the system "save as" picker; the activity
+// reports the outcome itself.
+func (p *androidPlatform) SaveFile(name string, data []byte) (string, error) {
+	dir := filepath.Join(p.cacheDir, "export")
+	os.RemoveAll(dir)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	f := filepath.Join(dir, name)
+	if err := os.WriteFile(f, data, 0o600); err != nil {
+		return "", err
+	}
+	p.host.SaveFile(f, name)
+	return "pending", nil
+}
+
 func (p *androidPlatform) ClipboardGet() (string, error) { return p.host.ClipboardGet(), nil }
 func (p *androidPlatform) ClipboardSet(t string) error   { p.host.ClipboardSet(t); return nil }
 

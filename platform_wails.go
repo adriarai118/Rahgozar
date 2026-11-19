@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -59,6 +60,23 @@ func (p *wailsPlatform) Focus() {
 		time.Sleep(300 * time.Millisecond)
 		wr.WindowSetAlwaysOnTop(p.ctx, false)
 	}()
+}
+
+// SaveFile asks where to save and writes the file.
+func (p *wailsPlatform) SaveFile(name string, data []byte) (string, error) {
+	ext := filepath.Ext(name)
+	path, err := wr.SaveFileDialog(p.ctx, wr.SaveDialogOptions{
+		Title:           "ذخیره فایل پشتیبان",
+		DefaultFilename: name,
+		Filters:         []wr.FileFilter{{DisplayName: "Rahgozar backup (*" + ext + ")", Pattern: "*" + ext}},
+	})
+	if err != nil || path == "" {
+		return "", err
+	}
+	if filepath.Ext(path) == "" {
+		path += ext
+	}
+	return path, os.WriteFile(path, data, 0o600)
 }
 
 // quitting is set when the app really exits, so closing the window doesn't

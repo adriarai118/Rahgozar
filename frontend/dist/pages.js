@@ -287,6 +287,78 @@ Pages.serverRowUpdate = function (id) {
   row.replaceWith(tmp.firstElementChild);
 };
 
+// ---------------- backup ----------------
+
+const BACKUP_KIND = { rahgozar: 'پشتیبان رهگذر', wgtunnel: 'پشتیبان WG Tunnel', zip: 'آرشیو کانفیگ' };
+
+function openBackupCreate() {
+  Modal.open(`<div class="dialog sm" role="dialog" aria-modal="true"><header><h3>ساخت فایل پشتیبان</h3></header><div class="body">
+    <p class="lead" style="margin-top:0">سرورها و اشتراک‌ها همیشه ذخیره می‌شوند.</p>
+    ${switchRow('bkSettings', true, 'تنظیمات و دامنه‌های شما', 'حالت اتصال، مسیریابی، DNS، فهرست سایت‌های تونل/مستقیم/مسدود')}
+    ${switchRow('bkLearning', true, 'داده یادگیری', 'کیفیت سرورها روی هر شبکه و سایت‌های یادگرفته‌شده')}
+    <div class="grid2" style="margin-top:10px">
+      <label class="field"><span>رمز (اختیاری)</span><input class="input ltr" type="password" id="bkPw" autocomplete="new-password"></label>
+      <label class="field"><span>تکرار رمز</span><input class="input ltr" type="password" id="bkPw2" autocomplete="new-password"></label>
+    </div>
+    <p class="mute" style="font-size:12px;margin:8px 0 0">فایل پشتیبان شامل کلیدها و رمزهای سرورهاست. اگر آن را جایی مثل تلگرام نگه می‌دارید، رمز بگذارید. بدون آن رمز، فایل قابل بازیابی نیست.</p>
+    <p class="err" id="bkErr" hidden></p>
+  </div><footer><button class="btn primary" id="bkGo">${icon('download')}ساخت و ذخیره</button><button class="btn ghost" onclick="Modal.close()">انصراف</button></footer></div>`, m => {
+    const err = t => { const e = m.querySelector('#bkErr'); e.textContent = t; e.hidden = !t; };
+    m.querySelector('#bkGo').onclick = async () => {
+      const pw = m.querySelector('#bkPw').value, pw2 = m.querySelector('#bkPw2').value;
+      if (pw !== pw2) return err('رمز و تکرار آن یکی نیستند');
+      const b = m.querySelector('#bkGo'); b.disabled = true;
+      try {
+        const r = await API.call('CreateBackup', { settings: m.querySelector('[name=bkSettings]').checked, learning: m.querySelector('[name=bkLearning]').checked, password: pw });
+        Modal.close();
+        if (r && r !== 'pending') toast('فایل پشتیبان ذخیره شد\n' + r, 'ok');
+      } catch (e) { b.disabled = false; err(errText(e)); }
+    };
+  });
+}
+
+async function openBackupRestore() {
+  let bf;
+  try { bf = await API.call('OpenBackup'); } catch (e) { toast(errText(e), 'error'); return; }
+  if (!bf) return;
+  const after = async () => { S.st = await API.call('GetState'); render(); };
+  if (bf.imported) { showImport(bf.imported); after(); return; }
+  const m = bf.manifest, rg = bf.kind === 'rahgozar';
+  const when = m && m.created ? new Date(m.created).toLocaleString('fa-IR') : '';
+  const info = m ? `<div class="kv"><span>ساخته‌شده</span><b>${esc(when)}</b><span>نسخه</span><b class="ltr">${esc(m.version || '')} · ${esc(m.platform || '')}</b><span>محتوا</span><b>${fa(m.profiles)} سرور، ${fa(m.subs)} اشتراک</b></div>` : '';
+  Modal.open(`<div class="dialog sm" role="dialog" aria-modal="true"><header><h3>${esc(BACKUP_KIND[bf.kind] || 'فایل پشتیبان')}</h3></header><div class="body">
+    <p class="lead ltr" style="margin-top:0;text-align:right">${esc(bf.name)}</p>
+    ${info}
+    ${rg ? `${switchRow('rsServers', true, 'سرورها و اشتراک‌ها', 'فقط مواردی که اینجا نیستند اضافه می‌شوند')}
+      ${!m || m.settings ? switchRow('rsSettings', false, 'تنظیمات', 'حالت اتصال، اکستنشن و تنظیمات مخصوص این دستگاه دست نمی‌خورند؛ فهرست سایت‌ها با فهرست فعلی یکی می‌شود') : ''}
+      ${!m || m.learning ? switchRow('rsLearning', true, 'داده یادگیری', 'فقط داده‌ای که این دستگاه ندارد اضافه می‌شود') : ''}` : ''}
+    ${bf.encrypted ? `<label class="field" style="margin-top:10px"><span>رمز فایل</span><input class="input ltr" type="password" id="rsPw" autofocus></label>` : ''}
+    <p class="err" id="rsErr" hidden></p>
+  </div><footer><button class="btn primary" id="rsGo">بازیابی</button><button class="btn ghost" onclick="Modal.close()">انصراف</button></footer></div>`, mm => {
+    const err = t => { const e = mm.querySelector('#rsErr'); e.textContent = t; e.hidden = !t; };
+    const chk = n => { const e = mm.querySelector(`[name=${n}]`); return !!(e && e.checked); };
+    const pwEl = mm.querySelector('#rsPw');
+    if (pwEl) pwEl.onkeydown = e => { if (e.key === 'Enter') mm.querySelector('#rsGo').click(); };
+    mm.querySelector('#rsGo').onclick = async () => {
+      const b = mm.querySelector('#rsGo'); b.disabled = true; err('');
+      const wantSettings = chk('rsSettings');
+      try {
+        const r = await API.call('RestoreBackup', bf.token, pwEl ? pwEl.value : '', { servers: rg ? chk('rsServers') : true, settings: wantSettings, learning: chk('rsLearning') });
+        Modal.close();
+        if (rg && !r.added && (!r.errors || !r.errors.length)) toast('بازیابی انجام شد؛ سرور تازه‌ای نبود', 'ok');
+        else showImport(r);
+        if (wantSettings) toast('تنظیمات بازیابی شد', 'ok');
+        after();
+      } catch (e) {
+        b.disabled = false;
+        const t = errText(e);
+        err(t.includes('NEED_PASSWORD') ? 'رمز فایل را وارد کنید' : t);
+        if (pwEl) pwEl.focus();
+      }
+    };
+  });
+}
+
 // ---------------- QR ----------------
 
 async function importQRImageFile(file) {
@@ -837,6 +909,11 @@ Pages.settings = function () {
     ${switchRow('updateViaProxy', s.updateViaProxy, 'دانلود آپدیت‌ها از داخل تونل', 'وقتی وصل هستید، دانلود موتورها و برنامه از طریق تونل انجام می‌شود')}
     ${switchRow('checkUpdates', s.checkUpdates, 'بررسی خودکار نسخه جدید', '')}
   </div></div>
+  <div class="section"><h2>پشتیبان‌گیری و بازیابی</h2><div class="panel pad">
+    <p class="mute" style="font-size:12.5px;margin:0 0 12px">سرورها، اشتراک‌ها، تنظیمات و یادگیری را در یک فایل نگه دارید و روی ویندوز یا گوشی دیگر برگردانید. بازیابی چیزی را پاک نمی‌کند؛ فقط موارد تازه اضافه می‌شوند.</p>
+    <div style="gap:8px;display:flex;flex-wrap:wrap"><button class="btn primary" type="button" id="mkBackup">${icon('download')}ساخت فایل پشتیبان</button><button class="btn" type="button" id="restoreBackup">${icon('upload')}بازیابی یا وارد کردن از برنامه دیگر</button></div>
+    <p class="mute" style="font-size:12px;margin:12px 0 0">قابل خواندن: پشتیبان رهگذر (<span class="ltr">.rgbak</span>)، پشتیبان کامل و خروجی zip برنامه WG Tunnel (با رمز یا بدون رمز)، zip کانفیگ‌های WireGuard / WireSock / AmneziaWG، و فایل‌های <span class="ltr">.conf</span>، <span class="ltr">.ovpn</span>، Clash و <span class="ltr">sing-box</span>.</p>
+  </div></div>
   <div class="section"><h2>ظاهر و گزارش</h2><div class="panel pad"><div class="grid2">
     ${sel('theme', 'پوسته', [['dark', 'تیره'], ['light', 'روشن']])}
     ${sel('logLevel', 'سطح گزارش موتورها', [['error', 'فقط خطا'], ['warn', 'هشدار'], ['info', 'اطلاعات'], ['debug', 'جزئیات کامل']])}
@@ -867,6 +944,8 @@ Pages.settingsMount = function (v) {
     saveSettings({ [el.name]: val });
   });
   v.querySelector('#openData').onclick = () => API.call('OpenDataDir');
+  v.querySelector('#mkBackup').onclick = openBackupCreate;
+  v.querySelector('#restoreBackup').onclick = openBackupRestore;
   v.querySelector('#openExt').onclick = () => API.call('OpenExtensionDir').catch(e => toast(errText(e), 'error'));
   const rv = v.querySelector('#revokeExt');
   if (rv) rv.onclick = async () => {

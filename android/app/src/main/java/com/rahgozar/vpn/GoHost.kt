@@ -89,6 +89,11 @@ class GoHost(private val ctx: Context) : Host {
         App.main.post { act.pickFiles(multiple) }
     }
 
+    override fun saveFile(path: String, name: String) {
+        val act = App.activity ?: return
+        App.main.post { act.saveFile(path, name) }
+    }
+
     override fun openURL(url: String) {
         App.main.post {
             try {

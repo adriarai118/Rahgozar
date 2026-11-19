@@ -75,6 +75,7 @@ const ICONS = {
   undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
   dup: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V4h12"/>',
   folder: '<path d="M3 6h7l2 2h9v11H3z"/>',
+  upload: '<path d="M12 20V9M7 14l5-5 5 5M5 4h14"/>',
   chain: '<rect x="2" y="9" width="8" height="6" rx="3"/><rect x="14" y="9" width="8" height="6" rx="3"/><path d="M10 12h4"/>',
   tun: '<path d="M4 18c0-7 3.6-12 8-12s8 5 8 12"/><path d="M2 18h20"/>',
   proxy: '<circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M8.5 12h7"/>'

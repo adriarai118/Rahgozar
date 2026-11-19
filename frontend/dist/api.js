@@ -149,6 +149,10 @@
     AndroidApps: async () => [{ pkg: 'org.telegram.messenger', name: 'Telegram' }, { pkg: 'com.instagram.android', name: 'Instagram' }, { pkg: 'ir.mobillet.app', name: 'موبایلت' }, { pkg: 'com.android.chrome', name: 'Chrome' }],
     ApprovePair: async () => {}, RevokeExtensions: async () => {}, OpenExtensionDir: async () => {}, WindowMinimise: async () => {}, WindowToggleMaximise: async () => {}, Quit: async () => {}, CloseWindow: async () => {},
     ImportQRScreen: async () => ({ added: 2, errors: [] }), ImportQRFiles: async () => ({ added: 1, errors: [] }), ImportQRImage: async () => ({ added: 1, errors: [] }), ScanQRCamera: async () => ({ added: 1, errors: [] }),
+    CreateBackup: async () => 'C:\\Users\\me\\Rahgozar-backup.rgbak',
+    OpenBackup: async () => ({ token: 't', name: 'Rahgozar-backup-2026-11-19-2010.rgbak', kind: 'rahgozar', encrypted: true, manifest: { app: 'rahgozar', version: '1.4.3', platform: 'windows', created: new Date().toISOString(), profiles: 42, subs: 2, settings: true, learning: true } }),
+    RestoreBackup: async (t, pw) => { if (!pw) throw new Error('NEED_PASSWORD'); return { added: 40, errors: [] }; },
+
     ProfileQR: async () => 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21"><rect width="21" height="21" fill="#fff"/><path d="M1 1h7v7H1zM13 1h7v7h-7zM1 13h7v7H1zM10 10h2v2h-2z" fill="#000"/></svg>')
   };
 

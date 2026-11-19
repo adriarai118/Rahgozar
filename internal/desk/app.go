@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"rahgozar/internal/backup"
 	"rahgozar/internal/builder"
 	"rahgozar/internal/core"
 	"rahgozar/internal/engine"
@@ -386,9 +387,34 @@ func (a *App) ImportClipboard() ImportResult {
 	return a.ImportText(t)
 }
 
+// importNamed imports one config text whose format is sniffed from its
+// content (WireGuard .conf, OpenVPN, or links/YAML/JSON).
+func (a *App) importNamed(text, name string) ImportResult {
+	t := "\n" + strings.ToLower(text)
+	switch {
+	case strings.Contains(t, "[interface]") && strings.Contains(t, "[peer]"):
+		p, err := parser.ParseWGConf(text, name)
+		if err != nil {
+			return ImportResult{Errors: []string{name + ": " + err.Error()}}
+		}
+		p.Group = "manual"
+		a.store.UpsertProfile(p)
+		return ImportResult{Added: 1}
+	case strings.Contains(t, "\nremote ") && (strings.Contains(t, "<ca>") || strings.Contains(t, "\nclient")):
+		p, err := parser.ParseOVPN(text, name)
+		if err != nil {
+			return ImportResult{Errors: []string{name + ": " + err.Error()}}
+		}
+		p.Group = "manual"
+		a.store.UpsertProfile(p)
+		return ImportResult{Added: 1}
+	}
+	return a.importText(text, "manual")
+}
+
 // ImportFiles lets the user pick .ovpn/.conf/.txt/.yaml/.json files.
 func (a *App) ImportFiles() ImportResult {
-	files, err := a.plat.PickFiles("وارد کردن کانفیگ", "*.ovpn;*.conf;*.txt;*.yaml;*.yml;*.json", true)
+	files, err := a.plat.PickFiles("وارد کردن کانفیگ", "*.ovpn;*.conf;*.txt;*.yaml;*.yml;*.json;*.zip;*.rgbak;*.sqlite3;*.aes", true)
 	if err != nil || len(files) == 0 {
 		return ImportResult{}
 	}
@@ -399,29 +425,15 @@ func (a *App) ImportFiles() ImportResult {
 			total.Errors = append(total.Errors, err.Error())
 			continue
 		}
-		name := strings.TrimSuffix(filepath.Base(f), filepath.Ext(f))
-		text := string(b)
 		var r ImportResult
-		switch strings.ToLower(filepath.Ext(f)) {
-		case ".ovpn":
-			p, err := parser.ParseOVPN(text, name)
-			if err != nil {
-				r.Errors = []string{name + ": " + err.Error()}
+		if info := backup.Detect(b, f); info.Kind != backup.KindOther {
+			if info.Encrypted {
+				r.Errors = []string{filepath.Base(f) + ": این فایل رمز دارد؛ از «تنظیمات ← پشتیبان‌گیری ← بازیابی» استفاده کنید"}
 			} else {
-				p.Group = "manual"
-				a.store.UpsertProfile(p)
-				r.Added = 1
+				r = a.importForeign(b, filepath.Base(f), info.Kind, "")
 			}
-		case ".conf":
-			if p, err := parser.ParseWGConf(text, name); err == nil {
-				p.Group = "manual"
-				a.store.UpsertProfile(p)
-				r.Added = 1
-			} else {
-				r = a.importText(text, "manual")
-			}
-		default:
-			r = a.importText(text, "manual")
+		} else {
+			r = a.importNamed(string(b), strings.TrimSuffix(filepath.Base(f), filepath.Ext(f)))
 		}
 		total.Added += r.Added
 		total.Errors = append(total.Errors, r.Errors...)
