@@ -506,26 +506,60 @@ func dnsServer(addr, tag, detour string) M {
 
 // BuildChain builds the outbound(s) for a chain profile. The last hop is
 // tagged "proxy".
-func buildChain(in *Input, p *model.Profile) (obs []M, eps []M, err error) {
+//
+// Only the first hop is visible to the local network, so it may run on a
+// helper engine (Mihomo: WireGuard junk packets/AmneziaWG, SSR; Xray:
+// XHTTP, mKCP, …) behind a local SOCKS port; later hops travel inside it and
+// must be sing-box protocols. A plain WireGuard hop there just uses
+// sing-box's own WireGuard.
+func buildChain(in *Input, p *model.Profile) (obs []M, eps []M, helpers []Helper, err error) {
 	if len(p.Chain) < 2 {
-		return nil, nil, errors.New("chain needs at least 2 hops")
+		return nil, nil, nil, errors.New("chain needs at least 2 hops")
 	}
 	prev := ""
 	for i, id := range p.Chain {
 		hop := in.Resolve(id)
 		if hop == nil {
-			return nil, nil, fmt.Errorf("chain hop %d not found", i+1)
-		}
-		if EngineFor(hop) != model.EngineSingBox || hop.Type == model.TChain {
-			return nil, nil, fmt.Errorf("chain hop %q must be a sing-box protocol", hop.Name)
+			return nil, nil, nil, fmt.Errorf("chain hop %d not found", i+1)
 		}
 		tag := fmt.Sprintf("hop-%d", i)
 		if i == len(p.Chain)-1 {
 			tag = "proxy"
 		}
+		if hop.Type == model.TChain || hop.IsRAS() {
+			return nil, nil, nil, fmt.Errorf("«%s» را نمی‌شود داخل زنجیره گذاشت", hop.Name)
+		}
+		eng := EngineFor(hop)
+		if eng != model.EngineSingBox && i > 0 && hop.Type == model.TWireGuard && !NeedsAWG(hop) {
+			eng = model.EngineSingBox // inside the tunnel junk packets aren't needed
+		}
+		if eng == model.EngineXray || eng == model.EngineMihomo {
+			if i > 0 {
+				return nil, nil, nil, fmt.Errorf("«%s» (موتور %s) فقط می‌تواند اولین حلقه زنجیره باشد", hop.Name, eng)
+			}
+			port := in.PortAlloc()
+			var cfg []byte
+			fname := "xray-chain.json"
+			if eng == model.EngineXray {
+				cfg, err = XrayConfig(hop, port, in.Settings.LogLevel)
+			} else {
+				cfg, err = MihomoConfig(hop, port, in.Settings.LogLevel)
+				fname = "mihomo-chain.yaml"
+			}
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			helpers = append(helpers, Helper{Engine: eng, ProfileID: hop.ID, Port: port, Config: cfg, FileName: fname})
+			obs = append(obs, M{"type": "socks", "tag": tag, "server": "127.0.0.1", "server_port": port, "version": "5"})
+			prev = tag
+			continue
+		}
+		if eng != model.EngineSingBox {
+			return nil, nil, nil, fmt.Errorf("«%s» را نمی‌شود داخل زنجیره گذاشت", hop.Name)
+		}
 		ob, isEp, err := SingBoxOutbound(hop, tag, &in.Settings)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		if prev != "" {
 			ob["detour"] = prev
@@ -537,5 +571,5 @@ func buildChain(in *Input, p *model.Profile) (obs []M, eps []M, err error) {
 			obs = append(obs, ob)
 		}
 	}
-	return obs, eps, nil
+	return obs, eps, helpers, nil
 }

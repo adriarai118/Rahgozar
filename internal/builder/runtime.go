@@ -85,10 +85,11 @@ func Build(in *Input) (*Result, error) {
 	switch eng := EngineFor(p); eng {
 	case model.EngineSingBox:
 		if p.Type == model.TChain {
-			obs, eps, err := buildChain(in, p)
+			obs, eps, helpers, err := buildChain(in, p)
 			if err != nil {
 				return nil, err
 			}
+			res.Helpers = append(res.Helpers, helpers...)
 			outbounds = append(outbounds, obs...)
 			endpoints = append(endpoints, eps...)
 		} else {

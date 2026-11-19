@@ -168,6 +168,53 @@ func TestBuildAll(t *testing.T) {
 		t.Fatal(err)
 	}
 	check(t, "chain", res.SingBox)
+
+	// chains with helper engines (Mihomo available, as on Windows/Android)
+	old := HelperAvailable
+	HelperAvailable = func(string) bool { return true }
+	wg, rl, tr, xh, ssr := ps[11], ps[0], ps[5], ps[15], ps[16]
+	cases := []struct {
+		name    string
+		hops    []*model.Profile
+		helpers []string // engines expected to run as helpers
+		fail    bool
+	}{
+		{"wg-first", []*model.Profile{wg, rl, tr}, []string{model.EngineMihomo}, false},
+		{"wg-last", []*model.Profile{rl, wg}, nil, false},
+		{"wg-middle", []*model.Profile{rl, wg, tr}, nil, false},
+		{"xhttp-first", []*model.Profile{xh, rl}, []string{model.EngineXray}, false},
+		{"ssr-first", []*model.Profile{ssr, tr}, []string{model.EngineMihomo}, false},
+		{"xhttp-later", []*model.Profile{rl, xh}, nil, true},
+		{"ssr-later", []*model.Profile{rl, ssr}, nil, true},
+	}
+	for _, c := range cases {
+		ch := &model.Profile{ID: "c-" + c.name, Name: c.name, Type: model.TChain}
+		for _, h := range c.hops {
+			ch.Chain = append(ch.Chain, h.ID)
+		}
+		res, err := Build(&Input{Settings: model.DefaultSettings(), Profile: ch, Mode: "tun", RulesDir: rules, LearnedDir: learned,
+			PortAlloc: func() int { port++; return port }, HasRuleFiles: has, Resolve: func(id string) *model.Profile { return byID[id] }, ExeName: "Rahgozar.exe"})
+		if c.fail {
+			if err == nil {
+				t.Errorf("%s: expected an error", c.name)
+			} else {
+				t.Logf("%s: %v", c.name, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		var got []string
+		for _, h := range res.Helpers {
+			got = append(got, h.Engine)
+		}
+		if strings.Join(got, ",") != strings.Join(c.helpers, ",") {
+			t.Errorf("%s: helpers %v, want %v", c.name, got, c.helpers)
+		}
+		check(t, "chain/"+c.name, res.SingBox)
+	}
+	HelperAvailable = old
 	// test config
 	tc, skipped := BuildTest(&TestInput{Profiles: ps, ClashAddr: "127.0.0.1:9191", Settings: model.DefaultSettings()})
 	if len(skipped) != 2 {
