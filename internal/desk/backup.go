@@ -6,13 +6,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"rahgozar/internal/backup"
+	"rahgozar/internal/builder"
 	"rahgozar/internal/core"
 	"rahgozar/internal/model"
+	"rahgozar/internal/parser"
 	"rahgozar/internal/smart"
 )
 
@@ -76,6 +79,15 @@ type BackupFile struct {
 	Encrypted bool             `json:"encrypted"`
 	Manifest  *backup.Manifest `json:"manifest,omitempty"`
 	Imported  *ImportResult    `json:"imported,omitempty"` // already handled (no questions needed)
+	Summary   *ForeignSummary  `json:"summary,omitempty"`  // other apps' backups (Exclave)
+}
+
+// ForeignSummary counts what another app's backup holds.
+type ForeignSummary struct {
+	Subs       int            `json:"subs"`       // subscription links
+	Manual     int            `json:"manual"`     // servers outside subscriptions
+	SubServers int            `json:"subServers"` // servers cached in subscriptions
+	Skipped    map[string]int `json:"skipped"`
 }
 
 var pending = struct {
@@ -86,6 +98,7 @@ var pending = struct {
 type pendingFile struct {
 	name string
 	b    []byte
+	ex   *backup.ExclaveData
 }
 
 // OpenBackup lets the user pick a backup/export file. Files that need no
@@ -104,10 +117,22 @@ func (a *App) OpenBackup() (*BackupFile, error) {
 	name := filepath.Base(files[0])
 	info := backup.Detect(b, name)
 	bf := &BackupFile{Name: name, Kind: info.Kind, Encrypted: info.Encrypted, Manifest: info.Manifest}
+	if info.Kind == backup.KindExclave {
+		ex, err := backup.Exclave(b)
+		if err != nil {
+			return nil, err
+		}
+		bf.Summary = exclaveSummary(ex)
+		bf.Token = model.NewID()
+		pending.Lock()
+		pending.m = map[string]pendingFile{bf.Token: {name: name, ex: ex}}
+		pending.Unlock()
+		return bf, nil
+	}
 	if info.Kind == backup.KindRahgozar || info.Encrypted {
 		bf.Token = model.NewID()
 		pending.Lock()
-		pending.m = map[string]pendingFile{bf.Token: {name, b}} // keep only the latest
+		pending.m = map[string]pendingFile{bf.Token: {name: name, b: b}} // keep only the latest
 		pending.Unlock()
 		return bf, nil
 	}
@@ -118,9 +143,11 @@ func (a *App) OpenBackup() (*BackupFile, error) {
 
 // RestoreOptions chooses what to take from a Rahgozar backup.
 type RestoreOptions struct {
-	Servers  bool `json:"servers"`
-	Settings bool `json:"settings"`
-	Learning bool `json:"learning"`
+	Servers    bool `json:"servers"`
+	Settings   bool `json:"settings"`
+	Learning   bool `json:"learning"`
+	Subs       bool `json:"subs"`       // other apps: add subscription links
+	SubServers bool `json:"subServers"` // other apps: also the servers cached in them
 }
 
 // RestoreBackup restores a picked backup (see OpenBackup). Servers and
@@ -131,6 +158,11 @@ func (a *App) RestoreBackup(token, password string, o RestoreOptions) (ImportRes
 	pending.Unlock()
 	if !ok {
 		return ImportResult{}, errors.New("فایل پشتیبان دوباره انتخاب شود")
+	}
+	if f.ex != nil {
+		r := a.restoreExclave(f.ex, o)
+		a.forget(token)
+		return r, nil
 	}
 	info := backup.Detect(f.b, f.name)
 	if info.Kind != backup.KindRahgozar {
@@ -293,6 +325,12 @@ func (a *App) importForeign(b []byte, name string, kind backup.Kind, password st
 		items, err = backup.WGTunnel(b, name, password)
 	case backup.KindZip:
 		items, err = backup.ZipConfigs(b)
+	case backup.KindExclave:
+		ex, err := backup.Exclave(b)
+		if err != nil {
+			return ImportResult{Errors: []string{err.Error()}}
+		}
+		return a.restoreExclave(ex, RestoreOptions{Servers: true, Subs: true})
 	case backup.KindRahgozar:
 		d, err := backup.Read(b, password)
 		if err != nil {
@@ -312,4 +350,104 @@ func (a *App) importForeign(b []byte, name string, kind backup.Kind, password st
 		total.Errors = append(total.Errors, r.Errors...)
 	}
 	return total
+}
+
+func exclaveSummary(ex *backup.ExclaveData) *ForeignSummary {
+	subs := map[int64]bool{}
+	s := &ForeignSummary{Skipped: ex.Skipped}
+	for _, g := range ex.Groups {
+		if g.Sub && g.URL != "" {
+			subs[g.ID] = true
+			s.Subs++
+		}
+	}
+	for _, p := range ex.Profiles {
+		if subs[p.Group] {
+			s.SubServers++
+		} else {
+			s.Manual++
+		}
+	}
+	return s
+}
+
+// restoreExclave adds an Exclave backup's subscriptions and servers.
+func (a *App) restoreExclave(ex *backup.ExclaveData, o RestoreOptions) ImportResult {
+	res := ImportResult{}
+	byURL := map[string]string{}
+	for _, s := range a.store.Subscriptions() {
+		byURL[strings.TrimSpace(s.URL)] = s.ID
+	}
+	subOf := map[int64]string{} // exclave group -> local sub id ("" = not imported)
+	isSub := map[int64]bool{}
+	for _, g := range ex.Groups {
+		if !g.Sub || g.URL == "" {
+			continue
+		}
+		isSub[g.ID] = true
+		if !o.Subs {
+			continue
+		}
+		u := strings.TrimSpace(g.URL)
+		if id, ok := byURL[u]; ok {
+			subOf[g.ID] = id
+			continue
+		}
+		name := g.Name
+		if name == "" {
+			name = "Exclave"
+		}
+		sub := &model.Subscription{Name: name, URL: u, UserAgent: g.UserAgent, AutoUpdate: true, IntervalH: 12, ViaProxy: true}
+		a.store.UpsertSub(sub)
+		byURL[u] = sub.ID
+		subOf[g.ID] = sub.ID
+	}
+	have := map[string]bool{}
+	for _, p := range a.store.Profiles() {
+		have[profileKey(p)] = true
+	}
+	skipped := map[string]int{}
+	for r, c := range ex.Skipped {
+		skipped[r] = c
+	}
+	var add []*model.Profile
+	for _, x := range ex.Profiles {
+		p := x.Profile
+		if isSub[x.Group] {
+			if !o.SubServers || subOf[x.Group] == "" {
+				continue
+			}
+			p.Group = subOf[x.Group]
+		} else {
+			if !o.Servers {
+				continue
+			}
+			p.Group = "manual"
+		}
+		if err := builder.Validate(p); err != nil {
+			skipped[err.Error()]++
+			continue
+		}
+		p.ID = model.NewID()
+		p.Raw = parser.ToLink(p)
+		k := profileKey(p)
+		if have[k] {
+			continue
+		}
+		have[k] = true
+		add = append(add, p)
+	}
+	n, err := a.store.AddProfiles(add)
+	if err != nil {
+		res.Errors = append(res.Errors, err.Error())
+	}
+	res.Added = n
+	a.core.RecountSubs()
+	for r, c := range skipped {
+		res.Errors = append(res.Errors, fmt.Sprintf("%s: %d مورد رد شد", r, c))
+	}
+	sort.Strings(res.Errors)
+	a.emit("profiles", nil)
+	a.emit("subs", nil)
+	return res
 }

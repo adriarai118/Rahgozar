@@ -120,7 +120,7 @@ func transportOptions(p *model.Profile) (M, error) {
 		return nil, nil
 	case "ws":
 		tr := M{"type": "ws"}
-		path := p.Path
+		path := fixPercent(p.Path)
 		if path == "" {
 			path = "/"
 		}
@@ -137,7 +137,7 @@ func transportOptions(p *model.Profile) (M, error) {
 				}
 			}
 		}
-		tr["path"] = path
+		tr["path"] = fixPercent(path)
 		if p.Host != "" {
 			tr["headers"] = M{"Host": p.Host}
 		}
@@ -150,11 +150,11 @@ func transportOptions(p *model.Profile) (M, error) {
 			tr["host"] = h
 		}
 		if p.Path != "" {
-			tr["path"] = p.Path
+			tr["path"] = fixPercent(p.Path)
 		}
 		return tr, nil
 	case "httpupgrade":
-		tr := M{"type": "httpupgrade", "path": firstOr(p.Path, "/")}
+		tr := M{"type": "httpupgrade", "path": fixPercent(firstOr(p.Path, "/"))}
 		if p.Host != "" {
 			tr["host"] = p.Host
 		}
@@ -183,6 +183,9 @@ func parsePorts(s string) []string {
 // SingBoxOutbound converts a profile to a sing-box outbound or endpoint.
 // isEndpoint reports whether it belongs in "endpoints".
 func SingBoxOutbound(p *model.Profile, tag string, st *model.Settings) (ob M, isEndpoint bool, err error) {
+	if err := Validate(p); err != nil {
+		return nil, false, err
+	}
 	base := func(t string) M {
 		return M{"type": t, "tag": tag, "server": p.Server, "server_port": p.Port}
 	}
@@ -215,7 +218,7 @@ func SingBoxOutbound(p *model.Profile, tag string, st *model.Settings) (ob M, is
 				pl = "obfs-local"
 			}
 			ob["plugin"] = pl
-			ob["plugin_opts"] = p.PluginOpts
+			ob["plugin_opts"] = fixPluginOpts(p.PluginOpts)
 		}
 	case model.TSocks:
 		ob = base("socks")

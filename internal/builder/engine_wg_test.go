@@ -35,3 +35,39 @@ func TestWireGuardEngine(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateAndFixes(t *testing.T) {
+	good := "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0"
+	cases := []struct {
+		p  model.Profile
+		ok bool
+	}{
+		{model.Profile{Type: model.TVLESS, Security: "reality", PublicKey: good, ShortID: "12ab"}, true},
+		{model.Profile{Type: model.TVLESS, Security: "reality", PublicKey: "abc"}, false},
+		{model.Profile{Type: model.TVLESS, Security: "reality", PublicKey: good, ShortID: "r@"}, false},
+		{model.Profile{Type: model.TVLESS, Security: "reality", PublicKey: good, ShortID: "123"}, false},
+		{model.Profile{Type: model.TShadowsocks, Method: "chacha20", Password: "x"}, false},
+		{model.Profile{Type: model.TShadowsocks, Method: "aes-256-gcm"}, false},
+		{model.Profile{Type: model.TShadowsocks, Method: "AES-256-GCM", Password: "x"}, true},
+		{model.Profile{Type: model.TShadowsocks, Method: "2022-blake3-aes-128-gcm", Password: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}, false},
+		{model.Profile{Type: model.TShadowsocks, Method: "2022-blake3-aes-128-gcm", Password: "AAAAAAAAAAAAAAAAAAAAAA=="}, true},
+		{model.Profile{Type: model.TVMess, Network: "quic"}, false},
+	}
+	for i, c := range cases {
+		if err := Validate(&c.p); (err == nil) != c.ok {
+			t.Errorf("case %d: %v", i, err)
+		}
+	}
+	if got := fixPercent("/a%2.b%20c%"); got != "/a%252.b%20c%25" {
+		t.Error(got)
+	}
+	if got := fixPluginOpts("obfs=http;mux=true;host=a"); got != "obfs=http;mux=1;host=a" {
+		t.Error(got)
+	}
+	if got := fixPluginOpts("tls;mux=undefined"); got != "tls" {
+		t.Error(got)
+	}
+	if got := fixPluginOpts("mux=mux=4"); got != "mux=4" {
+		t.Error(got)
+	}
+}

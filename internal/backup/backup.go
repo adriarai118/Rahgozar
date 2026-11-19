@@ -148,6 +148,9 @@ func Detect(b []byte, name string) Info {
 		return Info{Kind: KindRahgozar, Encrypted: true}
 	}
 	ext := strings.ToLower(path.Ext(name))
+	if isExclave(b) {
+		return Info{Kind: KindExclave}
+	}
 	if bytes.HasPrefix(b, []byte("SQLite format 3\x00")) {
 		return Info{Kind: KindWGTunnel}
 	}

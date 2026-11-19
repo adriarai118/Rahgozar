@@ -256,7 +256,8 @@ Pages.servers = function () {
     ${!S.testing && deadProfiles().length ? `<button class="btn danger" id="delDead" title="سرورهایی که در آخرین تست جواب ندادند">${icon('trash')}حذف قطع‌ها (${fa(deadProfiles().length)})</button>` : ''}
     ${S.selected.size ? `<button class="btn" id="mkChain">${icon('chain')}زنجیره</button><button class="btn danger" id="delSel">${icon('trash')}حذف ${fa(S.selected.size)}</button>` : ''}
   </div>
-  <div class="rows" id="rows">${list.length ? list.map(rowHTML).join('') : emptyServers()}</div>`;
+  <div class="rows" id="rows">${list.length ? list.slice(0, S.limit || 300).map(rowHTML).join('') : emptyServers()}</div>
+  ${list.length > (S.limit || 300) ? `<div style="text-align:center;margin:14px 0"><button class="btn" id="moreRows">نمایش ${fa(Math.min(300, list.length - (S.limit || 300)))} سرور دیگر (از ${fa(list.length)})</button></div>` : ''}`;
 };
 
 // servers in the current view whose latest test failed (selected/connected kept)
@@ -289,7 +290,7 @@ Pages.serverRowUpdate = function (id) {
 
 // ---------------- backup ----------------
 
-const BACKUP_KIND = { rahgozar: 'پشتیبان رهگذر', wgtunnel: 'پشتیبان WG Tunnel', zip: 'آرشیو کانفیگ' };
+const BACKUP_KIND = { rahgozar: 'پشتیبان رهگذر', wgtunnel: 'پشتیبان WG Tunnel', zip: 'آرشیو کانفیگ', exclave: 'پشتیبان Exclave' };
 
 function openBackupCreate() {
   Modal.open(`<div class="dialog sm" role="dialog" aria-modal="true"><header><h3>ساخت فایل پشتیبان</h3></header><div class="body">
@@ -317,6 +318,14 @@ function openBackupCreate() {
   });
 }
 
+function exclaveRows(sm) {
+  const skipped = Object.entries(sm.skipped || {}).map(([k, n]) => `${esc(k)}: ${fa(n)}`).join('، ');
+  return `<div class="kv"><span>اشتراک‌ها</span><b>${fa(sm.subs)}</b><span>سرورهای دستی</span><b>${fa(sm.manual)}</b><span>سرورهای اشتراک‌ها</span><b>${fa(sm.subServers)}</b>${skipped ? `<span>رد می‌شوند</span><b style="font-weight:400">${skipped}</b>` : ''}</div>
+    ${switchRow('rsServers', true, 'سرورهای دستی', 'سرورهایی که بیرون از اشتراک‌ها اضافه کرده‌اید')}
+    ${switchRow('rsSubs', true, 'اشتراک‌ها', 'لینک اشتراک‌ها اضافه می‌شود؛ سرورهایشان با «به‌روزرسانی» تازه می‌آیند')}
+    ${switchRow('rsSubServers', false, 'سرورهای ذخیره‌شده اشتراک‌ها', sm.subServers > 5000 ? `${fa(sm.subServers)} سرور؛ لیست سنگین می‌شود. بهتر است اشتراک‌ها را به‌روزرسانی کنید` : 'نسخه‌ای که Exclave آخرین بار دریافت کرده')}`;
+}
+
 async function openBackupRestore() {
   let bf;
   try { bf = await API.call('OpenBackup'); } catch (e) { toast(errText(e), 'error'); return; }
@@ -332,6 +341,7 @@ async function openBackupRestore() {
     ${rg ? `${switchRow('rsServers', true, 'سرورها و اشتراک‌ها', 'فقط مواردی که اینجا نیستند اضافه می‌شوند')}
       ${!m || m.settings ? switchRow('rsSettings', false, 'تنظیمات', 'حالت اتصال، اکستنشن و تنظیمات مخصوص این دستگاه دست نمی‌خورند؛ فهرست سایت‌ها با فهرست فعلی یکی می‌شود') : ''}
       ${!m || m.learning ? switchRow('rsLearning', true, 'داده یادگیری', 'فقط داده‌ای که این دستگاه ندارد اضافه می‌شود') : ''}` : ''}
+    ${bf.summary ? exclaveRows(bf.summary) : ''}
     ${bf.encrypted ? `<label class="field" style="margin-top:10px"><span>رمز فایل</span><input class="input ltr" type="password" id="rsPw" autofocus></label>` : ''}
     <p class="err" id="rsErr" hidden></p>
   </div><footer><button class="btn primary" id="rsGo">بازیابی</button><button class="btn ghost" onclick="Modal.close()">انصراف</button></footer></div>`, mm => {
@@ -343,9 +353,11 @@ async function openBackupRestore() {
       const b = mm.querySelector('#rsGo'); b.disabled = true; err('');
       const wantSettings = chk('rsSettings');
       try {
-        const r = await API.call('RestoreBackup', bf.token, pwEl ? pwEl.value : '', { servers: rg ? chk('rsServers') : true, settings: wantSettings, learning: chk('rsLearning') });
+        const ex = !!bf.summary;
+        const r = await API.call('RestoreBackup', bf.token, pwEl ? pwEl.value : '', { servers: rg || ex ? chk('rsServers') : true, settings: wantSettings, learning: chk('rsLearning'), subs: chk('rsSubs'), subServers: chk('rsSubServers') });
         Modal.close();
-        if (rg && !r.added && (!r.errors || !r.errors.length)) toast('بازیابی انجام شد؛ سرور تازه‌ای نبود', 'ok');
+        if ((rg || ex) && !r.added && (!r.errors || !r.errors.length)) toast('بازیابی انجام شد؛ سرور تازه‌ای نبود', 'ok');
+        else if (ex) { toast(fa(r.added) + ' سرور اضافه شد', 'ok'); if (r.errors && r.errors.length) toast('رد شده‌ها:\n' + r.errors.join('\n'), 'warn'); }
         else showImport(r);
         if (wantSettings) toast('تنظیمات بازیابی شد', 'ok');
         after();
@@ -426,9 +438,10 @@ Pages.serversMount = function (v) {
   v.querySelector('#impFile').onclick = async () => { showImport(await API.call('ImportFiles')); reload(); };
   v.querySelector('#addSub').onclick = () => openSubEditor();
   v.querySelector('#impQR').onclick = () => openQRImport(reload);
+  const more = v.querySelector('#moreRows'); if (more) more.onclick = () => { S.limit = (S.limit || 300) + 300; render(); };
   v.querySelector('#addMan').onclick = () => openEditor({ type: 'vless', network: 'tcp', security: 'reality', port: 443 });
   const q = v.querySelector('#q');
-  q.oninput = () => { S.query = q.value; v.querySelector('#rows').innerHTML = filteredProfiles().map(rowHTML).join('') || emptyServers(); };
+  q.oninput = () => { S.query = q.value; S.limit = 300; v.querySelector('#rows').innerHTML = filteredProfiles().slice(0, 300).map(rowHTML).join('') || emptyServers(); };
   v.querySelector('#testAll').onclick = () => {
     const ids = S.selected.size ? [...S.selected] : filteredProfiles().map(p => p.id);
     if (ids.length) API.call('TestProfiles', ids);
@@ -466,7 +479,7 @@ Pages.serversMount = function (v) {
     if (!t) return;
     const d = t.dataset;
     try {
-      if (d.group) { S.group = d.group; S.selected.clear(); render(); }
+      if (d.group) { S.group = d.group; S.limit = 300; S.selected.clear(); render(); }
       else if (d.sel) { t.checked ? S.selected.add(d.sel) : S.selected.delete(d.sel); render(); }
       else if (d.use) { await API.call('Select', d.use); S.st.settings.selectedId = d.use; render(); if (S.st.status.state !== 'connected') toast('انتخاب شد؛ از صفحه خانه وصل شوید', 'info'); }
       else if (d.test) API.call('TestProfiles', [d.test]);
