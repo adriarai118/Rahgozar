@@ -529,11 +529,13 @@ function editorBody(p) {
     <label class="field"><span>نوع</span><select class="input" name="type">${TYPES.filter(([v]) => !isAndroid() || !ANDROID_UNSUPPORTED.includes(v)).map(([v, l]) => `<option value="${v}" ${p.type === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
     <label class="field"><span>نام</span><input class="input" name="name" value="${esc(p.name || '')}"></label>`;
   if (p.type === 'chain') {
-    const ps = (S.st.profiles || []).filter(x => x.type !== 'chain' && x.engineId === 'sing-box' && x.id !== p.id);
+    const ps = (S.st.profiles || []).filter(x => x.type !== 'chain' && !['pptp', 'l2tp', 'sstp', 'ikev2'].includes(x.type) && x.id !== p.id);
+    // Xray/Mihomo-only protocols can only be the first hop (WireGuard can be anywhere)
+    const firstOnly = x => x.engineId !== 'sing-box' && x.type !== 'wireguard';
     const chain = p.chain || [];
-    h += `</div><p class="lead" style="margin-top:14px">ترتیب عبور ترافیک: از اولین گره به آخرین. فقط پروتکل‌هایی که sing-box اجرا می‌کند در زنجیره مجازند.</p>
+    h += `</div><p class="lead" style="margin-top:14px">ترتیب عبور ترافیک: از اولین گره به آخرین. فقط گره اول برای اپراتور اینترنت دیده می‌شود؛ WireGuard هر جای زنجیره می‌تواند باشد، XHTTP، mKCP و SSR فقط گره اول.</p>
       <div class="list-pick" id="chainList">${chain.map((id, i) => { const x = profileById(id); return x ? `<button type="button" data-hop="${i}" aria-pressed="true"><span class="ptype">${fa(i + 1)}</span><span class="nm">${esc(x.name)}</span><span class="faint">حذف</span></button>` : ''; }).join('')}</div>
-      <label class="field" style="margin-top:10px"><span>افزودن گره</span><select class="input" id="addHop"><option value="">—</option>${ps.map(x => `<option value="${x.id}">${esc(x.name)} (${esc(PROTO_LABEL[x.type])})</option>`).join('')}</select></label>`;
+      <label class="field" style="margin-top:10px"><span>افزودن گره</span><select class="input" id="addHop"><option value="">—</option>${ps.map(x => `<option value="${x.id}">${esc(x.name)} (${esc(PROTO_LABEL[x.type] || x.type)}${firstOnly(x) ? ' · فقط گره اول' : ''})</option>`).join('')}</select></label>`;
     return h;
   }
   if (p.type !== 'openvpn') {
