@@ -57,7 +57,7 @@ func (r *androidRunner) Available(eng string) error {
 	case model.EngineSingBox, model.EngineXray:
 		return nil
 	case model.EngineMihomo:
-		return errors.New("موتور Mihomo (برای ShadowsocksR و AmneziaWG) در نسخه اندروید نیست")
+		return errors.New("این سرور به موتور Mihomo نیاز دارد (ShadowsocksR یا AmneziaWG با هدرهای اختصاصی سرور) که در نسخه اندروید نیست")
 	}
 	return fmt.Errorf("موتور %s روی اندروید وجود ندارد", eng)
 }

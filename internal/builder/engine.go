@@ -2,8 +2,31 @@
 package builder
 
 import (
+	"strings"
+
 	"rahgozar/internal/model"
 )
+
+// NeedsAWG reports AmneziaWG parameters that the server must share
+// (handshake padding, magic headers, v3), as opposed to client-only junk.
+func NeedsAWG(p *model.Profile) bool {
+	for k := range p.AWG {
+		switch k {
+		case "jc", "jmin", "jmax", "i1", "i2", "i3", "i4", "i5", "j1", "j2", "j3", "itime":
+			continue
+		}
+		if k == "s1" || k == "s2" || k == "s3" || k == "s4" {
+			if v := p.AWG[k]; v == "0" || v == "" {
+				continue
+			}
+		}
+		if (k == "h1" || k == "h2" || k == "h3" || k == "h4") && p.AWG[k] == strings.TrimPrefix(k, "h") {
+			continue // 1,2,3,4 are the standard WireGuard message types
+		}
+		return true
+	}
+	return false
+}
 
 // HelperAvailable reports whether a helper engine can run here; the core
 // wires it to the engine manager (Android has no Mihomo).
@@ -23,11 +46,17 @@ func EngineFor(p *model.Profile) string {
 		// Plain WireGuard is easy prey for DPI. Mihomo adds AmneziaWG junk
 		// packets before the handshake (harmless to standard servers, like
 		// WireSock does by default) and speaks full AmneziaWG.
-		if p.Engine == model.EngineSingBox && len(p.AWG) == 0 {
+		// an explicit choice always wins
+		if p.Engine == model.EngineSingBox {
 			return model.EngineSingBox
 		}
-		// real AmneziaWG servers need it even if Mihomo still has to be installed
-		if HelperAvailable(model.EngineMihomo) || len(p.AWG) > 0 {
+		if HelperAvailable(model.EngineMihomo) || p.Engine == model.EngineMihomo {
+			return model.EngineMihomo
+		}
+		// No Mihomo (Android, or not installed yet): junk packets are optional
+		// for a standard server, so fall back to plain WireGuard. Real
+		// AmneziaWG servers (S*/H* headers, v3) can't work without it.
+		if NeedsAWG(p) {
 			return model.EngineMihomo
 		}
 		return model.EngineSingBox
