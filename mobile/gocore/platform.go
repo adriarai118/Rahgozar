@@ -43,6 +43,9 @@ func (p *androidPlatform) PickFiles(title, pattern string, multiple bool) ([]str
 	pickCh = ch
 	mu.Unlock()
 	mime := "*/*"
+	if strings.Contains(pattern, "*.png") {
+		mime = "image/*"
+	}
 	p.host.PickFiles(mime, multiple)
 	select {
 	case paths := <-ch:

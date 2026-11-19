@@ -147,7 +147,9 @@
     ClearLogs: async () => {}, CopyText: async () => {}, OpenDataDir: async () => {}, OpenURL: async () => {}, FixL2TP: async () => {},
     RelaunchAdmin: async () => {},
     AndroidApps: async () => [{ pkg: 'org.telegram.messenger', name: 'Telegram' }, { pkg: 'com.instagram.android', name: 'Instagram' }, { pkg: 'ir.mobillet.app', name: 'موبایلت' }, { pkg: 'com.android.chrome', name: 'Chrome' }],
-    ApprovePair: async () => {}, RevokeExtensions: async () => {}, OpenExtensionDir: async () => {}, WindowMinimise: async () => {}, WindowToggleMaximise: async () => {}, Quit: async () => {}, CloseWindow: async () => {}
+    ApprovePair: async () => {}, RevokeExtensions: async () => {}, OpenExtensionDir: async () => {}, WindowMinimise: async () => {}, WindowToggleMaximise: async () => {}, Quit: async () => {}, CloseWindow: async () => {},
+    ImportQRScreen: async () => ({ added: 2, errors: [] }), ImportQRFiles: async () => ({ added: 1, errors: [] }), ImportQRImage: async () => ({ added: 1, errors: [] }), ScanQRCamera: async () => ({ added: 1, errors: [] }),
+    ProfileQR: async () => 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21"><rect width="21" height="21" fill="#fff"/><path d="M1 1h7v7H1zM13 1h7v7h-7zM1 13h7v7H1zM10 10h2v2h-2z" fill="#000"/></svg>')
   };
 
   window.API = { call, on, real, android };

@@ -3,6 +3,7 @@ package desk
 import (
 	"encoding/json"
 	"errors"
+	"image"
 	"io/fs"
 	"net/http"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"rahgozar/internal/geo"
 	"rahgozar/internal/model"
 	"rahgozar/internal/parser"
+	"rahgozar/internal/qr"
 	"rahgozar/internal/smart"
 	"rahgozar/internal/store"
 	"rahgozar/internal/sys"
@@ -490,6 +492,90 @@ func (a *App) DuplicateProfile(id string) error {
 	cp.Group = "manual"
 	cp.Raw = ""
 	return a.store.UpsertProfile(&cp)
+}
+
+// ---------------- QR codes ----------------
+
+// screenCapturer platforms can grab the screen (Windows).
+type screenCapturer interface {
+	CaptureScreens() ([]image.Image, error)
+}
+
+func (a *App) importQRTexts(texts []string) ImportResult {
+	total := ImportResult{}
+	for _, t := range texts {
+		r := a.ImportText(t)
+		total.Added += r.Added
+		total.Errors = append(total.Errors, r.Errors...)
+	}
+	return total
+}
+
+// ImportQRScreen finds QR codes on the screen(s) and imports them.
+func (a *App) ImportQRScreen() ImportResult {
+	sc, ok := a.plat.(screenCapturer)
+	if !ok {
+		return ImportResult{Errors: []string{"اسکن صفحه در این نسخه نیست"}}
+	}
+	imgs, err := sc.CaptureScreens()
+	if err != nil {
+		return ImportResult{Errors: []string{err.Error()}}
+	}
+	var texts []string
+	for _, im := range imgs {
+		texts = append(texts, qr.Decode(im)...)
+	}
+	if len(texts) == 0 {
+		return ImportResult{Errors: []string{"QR codeی روی صفحه پیدا نشد؛ QR را کامل روی صفحه نمایش دهید و دوباره امتحان کنید"}}
+	}
+	return a.importQRTexts(texts)
+}
+
+// ImportQRFiles decodes QR codes from picked image files.
+func (a *App) ImportQRFiles() ImportResult {
+	files, err := a.plat.PickFiles("انتخاب تصویر QR", "*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp", true)
+	if err != nil || len(files) == 0 {
+		return ImportResult{}
+	}
+	var texts []string
+	var errs []string
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			errs = append(errs, err.Error())
+			continue
+		}
+		t, err := qr.DecodeBytes(b)
+		if err != nil {
+			errs = append(errs, filepath.Base(f)+": "+err.Error())
+			continue
+		}
+		texts = append(texts, t...)
+	}
+	r := a.importQRTexts(texts)
+	r.Errors = append(errs, r.Errors...)
+	return r
+}
+
+// ImportQRImage decodes a pasted/dropped image (data: URL).
+func (a *App) ImportQRImage(dataURL string) ImportResult {
+	t, err := qr.DecodeBytes([]byte(dataURL))
+	if err != nil {
+		return ImportResult{Errors: []string{err.Error()}}
+	}
+	return a.importQRTexts(t)
+}
+
+// ProfileQR renders a server's share link as a QR code (PNG data URL).
+func (a *App) ProfileQR(id string) (string, error) {
+	p := a.store.Profile(id)
+	if p == nil {
+		return "", errors.New("not found")
+	}
+	if p.Type == model.TOpenVPN {
+		return "", errors.New("فایل OpenVPN برای QR code بیش از حد بزرگ است؛ از «کپی لینک» یا خود فایل استفاده کنید")
+	}
+	return qr.DataURL(parser.ToLink(p), 640)
 }
 
 // CopyLink copies a profile's share link to the clipboard.

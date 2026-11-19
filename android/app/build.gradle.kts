@@ -65,4 +65,5 @@ android {
 dependencies {
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
     implementation("androidx.core:core-ktx:1.13.1")
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 }

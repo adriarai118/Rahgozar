@@ -17,6 +17,10 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import com.google.zxing.BarcodeFormat
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanIntentResult
+import com.journeyapps.barcodescanner.ScanOptions
 import gocore.Gocore
 import org.json.JSONArray
 import org.json.JSONObject
@@ -27,12 +31,14 @@ class MainActivity : Activity() {
     private lateinit var web: WebView
     private var pageReady = false
     private var pendingConnect: Int? = null
+    private var pendingScan: Int? = null
     private val pendingShare = mutableListOf<String>()
 
     companion object {
         private const val REQ_VPN = 10
         private const val REQ_FILES = 11
         private const val REQ_NOTIF = 12
+        private const val REQ_QR = 13
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -156,6 +162,10 @@ class MainActivity : Activity() {
                 runOnUiThread { requestConnect(id) }
                 return
             }
+            if (method == "ScanQRCamera") {
+                runOnUiThread { startScan(id) }
+                return
+            }
             if (method == "AndroidApps") {
                 App.io.execute { resolve(id, JSONObject().put("result", installedApps()).toString()) }
                 return
@@ -165,6 +175,22 @@ class MainActivity : Activity() {
 
         @JavascriptInterface
         fun platform(): String = "android"
+    }
+
+    /** Camera QR scanner (ZXing, works without Google Play services). */
+    private fun startScan(id: Int) {
+        pendingScan = id
+        val opts = ScanOptions()
+            .setDesiredBarcodeFormats(listOf(BarcodeFormat.QR_CODE.name))
+            .setPrompt("QR code کانفیگ را داخل کادر قرار دهید")
+            .setBeepEnabled(false)
+            .setOrientationLocked(false)
+        try {
+            startActivityForResult(ScanContract().createIntent(this, opts), REQ_QR)
+        } catch (e: Exception) {
+            pendingScan = null
+            resolve(id, JSONObject().put("error", "باز کردن دوربین ممکن نشد").toString())
+        }
     }
 
     /** VPN permission first, then connect. */
@@ -233,6 +259,16 @@ class MainActivity : Activity() {
                     }
                 } else if (id >= 0) {
                     resolve(id, JSONObject().put("error", "اجازه ساخت VPN داده نشد").toString())
+                }
+            }
+            REQ_QR -> {
+                val id = pendingScan ?: return
+                pendingScan = null
+                val text = ScanIntentResult.parseActivityResult(resultCode, data).contents
+                if (text.isNullOrBlank()) {
+                    resolve(id, JSONObject().put("result", JSONObject().put("added", 0).put("cancelled", true)).toString())
+                } else {
+                    App.io.execute { resolve(id, Gocore.call("ImportText", JSONArray().put(text).toString())) }
                 }
             }
             REQ_FILES -> {

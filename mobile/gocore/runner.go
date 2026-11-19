@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -46,6 +45,10 @@ func builtinEngines() []*engine.Status {
 			Desc:      "داخل برنامه: XHTTP، mKCP، VLESS Encryption",
 			Protocols: []string{"XHTTP", "VLESS", "VMess", "Reality", "Trojan", "mKCP"}},
 			Installed: true, Version: xcore.Version(), Latest: xcore.Version(), Builtin: true},
+		{Spec: engine.Spec{ID: "mihomo", Name: "Mihomo", Repo: "MetaCubeX/mihomo", Kind: "binary",
+			Desc:      "داخل برنامه: WireGuard با پکت‌های گمراه‌کننده، AmneziaWG و ShadowsocksR",
+			Protocols: []string{"WireGuard", "AmneziaWG", "ShadowsocksR"}},
+			Installed: true, Version: mihomoVersion(), Latest: mihomoVersion(), Builtin: true},
 	}
 }
 
@@ -54,10 +57,8 @@ type androidRunner struct{ dataDir string }
 
 func (r *androidRunner) Available(eng string) error {
 	switch eng {
-	case model.EngineSingBox, model.EngineXray:
+	case model.EngineSingBox, model.EngineXray, model.EngineMihomo:
 		return nil
-	case model.EngineMihomo:
-		return errors.New("این سرور به موتور Mihomo نیاز دارد (ShadowsocksR یا AmneziaWG با هدرهای اختصاصی سرور) که در نسخه اندروید نیست")
 	}
 	return fmt.Errorf("موتور %s روی اندروید وجود ندارد", eng)
 }
@@ -69,6 +70,8 @@ func (r *androidRunner) Start(j core.Job, onLine func(name, line string)) (core.
 	switch j.Engine {
 	case model.EngineXray:
 		return startXray(j, onLine)
+	case model.EngineMihomo:
+		return startMihomo(j, onLine)
 	case model.EngineSingBox:
 		if j.Main {
 			return startMain(j, onLine)

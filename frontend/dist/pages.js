@@ -223,6 +223,7 @@ function rowHTML(p) {
       <button class="btn ghost icon" data-test="${p.id}" title="تست تأخیر">${icon('bolt')}</button>
       <button class="btn ghost icon" data-edit="${p.id}" title="ویرایش">${icon('edit')}</button>
       <button class="btn ghost icon" data-copy="${p.id}" title="کپی لینک">${icon('copy')}</button>
+      <button class="btn ghost icon" data-qr="${p.id}" title="نمایش QR code">${icon('qr')}</button>
       <button class="btn ghost icon" data-dup="${p.id}" title="کپی از سرور">${icon('dup')}</button>
       <button class="btn ghost icon danger" data-del="${p.id}" title="حذف">${icon('trash')}</button>
     </div></div>`;
@@ -242,6 +243,7 @@ Pages.servers = function () {
       <button class="btn primary" id="impClip">${icon('clip')}از کلیپ‌بورد</button>
       <button class="btn" id="addSub">${icon('link')}اشتراک</button>
       <button class="btn" id="impFile">${icon('file')}فایل</button>
+      <button class="btn" id="impQR">${icon('qr')}QR</button>
       <button class="btn" id="addMan">${icon('plus')}دستی</button>
     </div></div>
   <button class="auto-card ${set.selectedId === 'auto' ? 'on' : ''}" data-use="auto">${icon('spark')}<span><b>انتخاب هوشمند ${set.selectedId === 'auto' ? '(فعال)' : ''}</b><small>به‌جای یک سرور ثابت، هر بار بهترین سرور را بر اساس تست زنده و تجربه قبلی انتخاب کن.</small></span></button>
@@ -285,6 +287,58 @@ Pages.serverRowUpdate = function (id) {
   row.replaceWith(tmp.firstElementChild);
 };
 
+// ---------------- QR ----------------
+
+async function importQRImageFile(file) {
+  const url = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
+  return API.call('ImportQRImage', url);
+}
+
+function openQRImport(reload) {
+  const android = isAndroid();
+  const done = r => { Modal.close(); if (r && !r.cancelled) showImport(r); reload(); };
+  const opt = (id, ic, t, d) => `<button class="auto-card" id="${id}">${icon(ic)}<span><b>${t}</b><small>${d}</small></span></button>`;
+  Modal.open(`<div class="dialog sm" role="dialog" aria-modal="true"><header><h3>وارد کردن از QR code</h3></header><div class="body qr-pick">
+    ${android ? opt('qrCam', 'camera', 'اسکن با دوربین', 'QR را از صفحه یک دستگاه دیگر یا کاغذ اسکن کنید') : opt('qrScreen', 'screen', 'اسکن صفحه', 'QR را در تلگرام، مرورگر یا هر جای دیگر روی صفحه باز بگذارید؛ همه QRهای روی صفحه خوانده می‌شوند')}
+    ${opt('qrFile', 'image', android ? 'از گالری' : 'از فایل تصویر', 'اسکرین‌شات یا عکس QR (چند فایل هم می‌شود)')}
+    ${android ? '' : `<div class="drop" id="qrDrop">تصویر QR را اینجا بکشید یا <b>Ctrl+V</b> کنید</div>`}
+  </div><footer><button class="btn ghost" onclick="Modal.close()">انصراف</button></footer></div>`, m => {
+    const busy = (b, label) => { b.disabled = true; const s = b.querySelector('b'); if (s) s.textContent = label; };
+    const cam = m.querySelector('#qrCam'); if (cam) cam.onclick = async () => { done(await API.call('ScanQRCamera')); };
+    const sc = m.querySelector('#qrScreen'); if (sc) sc.onclick = async () => { busy(sc, 'در حال اسکن صفحه…'); done(await API.call('ImportQRScreen')); };
+    m.querySelector('#qrFile').onclick = async () => { const r = await API.call('ImportQRFiles'); if (r && (r.added || (r.errors && r.errors.length))) done(r); };
+    const drop = m.querySelector('#qrDrop');
+    if (drop) {
+      drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+      drop.ondragleave = () => drop.classList.remove('over');
+      drop.ondrop = async e => { e.preventDefault(); const f = [...e.dataTransfer.files].find(f => f.type.startsWith('image/')); if (f) done(await importQRImageFile(f)); };
+    }
+  });
+}
+
+// pasting an image anywhere on the servers page imports its QR codes
+document.addEventListener('paste', async e => {
+  if (S.page !== 'servers' && !document.getElementById('qrDrop')) return;
+  const item = [...(e.clipboardData || {}).items || []].find(i => i.type && i.type.startsWith('image/'));
+  if (!item) return;
+  e.preventDefault();
+  const r = await importQRImageFile(item.getAsFile());
+  Modal.close(); showImport(r);
+  S.st = await API.call('GetState'); render();
+});
+
+async function showQR(id) {
+  const p = profileById(id);
+  let url;
+  try { url = await API.call('ProfileQR', id); } catch (err) { toast(errText(err), 'error'); return; }
+  Modal.open(`<div class="dialog sm" role="dialog" aria-modal="true"><header><h3>${flag(p && p.country)} ${esc(p ? p.name : '')}</h3></header><div class="body qr-show">
+    <img src="${url}" alt="QR code">
+    <p class="mute">با «QR ← دوربین» در رهگذر گوشی، یا هر برنامه دیگری اسکن کنید.</p>
+  </div><footer><button class="btn" id="qrCopy">${icon('copy')}کپی لینک</button><button class="btn ghost" onclick="Modal.close()">بستن</button></footer></div>`, m => {
+    m.querySelector('#qrCopy').onclick = async () => { await API.call('CopyLink', id); toast('لینک کپی شد', 'ok'); };
+  });
+}
+
 function showImport(r) {
   if (!r) return;
   if (r.added) toast(fa(r.added) + ' سرور اضافه شد', 'ok');
@@ -299,6 +353,7 @@ Pages.serversMount = function (v) {
   const i2 = v.querySelector('#impClip2'); if (i2) i2.onclick = imp;
   v.querySelector('#impFile').onclick = async () => { showImport(await API.call('ImportFiles')); reload(); };
   v.querySelector('#addSub').onclick = () => openSubEditor();
+  v.querySelector('#impQR').onclick = () => openQRImport(reload);
   v.querySelector('#addMan').onclick = () => openEditor({ type: 'vless', network: 'tcp', security: 'reality', port: 443 });
   const q = v.querySelector('#q');
   q.oninput = () => { S.query = q.value; v.querySelector('#rows').innerHTML = filteredProfiles().map(rowHTML).join('') || emptyServers(); };
@@ -345,6 +400,7 @@ Pages.serversMount = function (v) {
       else if (d.test) API.call('TestProfiles', [d.test]);
       else if (d.edit) openEditor(Object.assign({}, profileById(d.edit)));
       else if (d.copy) { await API.call('CopyLink', d.copy); toast('لینک کپی شد', 'ok'); }
+      else if (d.qr) showQR(d.qr);
       else if (d.dup) { await API.call('DuplicateProfile', d.dup); reload(); }
       else if (d.del) {
         const p = profileById(d.del);
@@ -866,7 +922,7 @@ Pages.connsUpdate = function () { const b = document.getElementById('connBody');
 // ANDROID: per-app tunnel
 // =====================================================================
 function isAndroid() { return (S.st && S.st.os === 'android') || API.android; }
-const ANDROID_UNSUPPORTED = ['pptp', 'l2tp', 'sstp', 'ikev2', 'ssr'];
+const ANDROID_UNSUPPORTED = ['pptp', 'l2tp', 'sstp', 'ikev2'];
 
 function perAppSection(s) {
   const mode = s.perAppMode || 'off';
